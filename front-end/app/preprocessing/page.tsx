@@ -28,6 +28,88 @@ function uniqRowKey(row: any, columns: string[]) {
 }
 
 /* =========================
+   IMAGE HELPERS
+========================= */
+
+async function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Failed to load image"));
+    };
+
+    img.src = url;
+  });
+}
+
+async function resizeAndNormalizeImage(
+  file: File,
+  size: number = 224,
+  quality: number = 0.92
+): Promise<File | null> {
+  if (!file.type.startsWith("image/")) return null;
+
+  const img = await loadImageFromFile(file);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  // Fill background white (avoids transparent PNG issues)
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, size, size);
+
+  // --- Keep aspect ratio (center crop) ---
+  const srcW = img.width;
+  const srcH = img.height;
+
+  const srcAspect = srcW / srcH;
+  const dstAspect = 1;
+
+  let cropW = srcW;
+  let cropH = srcH;
+
+  if (srcAspect > dstAspect) {
+    cropW = srcH;
+    cropH = srcH;
+  } else {
+    cropW = srcW;
+    cropH = srcW;
+  }
+
+  const sx = Math.floor((srcW - cropW) / 2);
+  const sy = Math.floor((srcH - cropH) / 2);
+
+  ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, size, size);
+
+  const blob: Blob | null = await new Promise((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", quality)
+  );
+
+  if (!blob) return null;
+
+  // ✅ FIX: include jpg too
+  const newFile = new File(
+    [blob],
+    file.name.replace(/\.(png|webp|jpeg|jpg)$/i, ".jpg"),
+    { type: "image/jpeg" }
+  );
+
+  return newFile;
+}
+
+/* =========================
    TYPES
 ========================= */
 
@@ -48,12 +130,24 @@ type SimplePreprocessSummary = {
   afterCols: number;
 
   removedDuplicates: number;
-  filledMissing: number; // total filled cells
-  handledOutliers: number; // total affected cells
+  filledMissing: number;
+  handledOutliers: number;
   scaledNumeric: boolean;
   encodedCategorical: boolean;
 
   droppedColumns: DroppedColumn[];
+  notes: string[];
+};
+
+type ImagePreprocessSummary = {
+  beforeCount: number;
+  afterCount: number;
+
+  resizedCount: number;
+  skippedNonImages: number;
+  removedCorrupted: number;
+
+  targetSize: number;
   notes: string[];
 };
 
@@ -63,17 +157,27 @@ type SimplePreprocessSummary = {
 
 export default function PreprocessingPage() {
   const router = useRouter();
-  const { state, setStructured } = useDataset();
+
+  // ✅ IMPORTANT: add setImages
+  const { state, setStructured, setImages } = useDataset();
 
   const structured = state.structured;
 
   const [isRunning, setIsRunning] = useState(false);
   const [done, setDone] = useState(false);
 
+  // ✅ NEW: store preview for UI
+  const [imagePreview, setImagePreview] = useState<any[]>([]);
+
+  // Structured summary
   const [summary, setSummary] = useState<SimplePreprocessSummary | null>(null);
 
-  const [protectedColumns, setProtectedColumns] = useState<string[]>([]);
+  // Image summary
+  const [imageSummary, setImageSummary] = useState<ImagePreprocessSummary | null>(
+    null
+  );
 
+  const [protectedColumns, setProtectedColumns] = useState<string[]>([]);
 
   /* =========================
      AUTH GUARD
@@ -83,20 +187,18 @@ export default function PreprocessingPage() {
     if (!isAuthed) router.replace("/auth");
   }, [router]);
 
-
   useEffect(() => {
-  if (typeof window === "undefined") return;
+    if (typeof window === "undefined") return;
 
-  const raw = localStorage.getItem("aidex_protected_cols");
-  if (!raw) return;
+    const raw = localStorage.getItem("aidex_protected_cols");
+    if (!raw) return;
 
-  try {
-    setProtectedColumns(JSON.parse(raw));
-  } catch {
-    setProtectedColumns([]);
-  }
-}, []);
-
+    try {
+      setProtectedColumns(JSON.parse(raw));
+    } catch {
+      setProtectedColumns([]);
+    }
+  }, []);
 
   /* =========================
      MUST HAVE DATASET
@@ -106,18 +208,26 @@ export default function PreprocessingPage() {
   }, [state.datasetKind, router]);
 
   useEffect(() => {
-  if (typeof window === "undefined") return;
-  localStorage.setItem("aidex_protected_cols", JSON.stringify(protectedColumns));
-}, [protectedColumns]);
+    if (typeof window === "undefined") return;
+    localStorage.setItem(
+      "aidex_protected_cols",
+      JSON.stringify(protectedColumns)
+    );
+  }, [protectedColumns]);
 
-
-  const canRun = useMemo(() => {
-    return state.datasetKind === "structured" && !!structured && !!state.targetColumn;
+  const canRunStructured = useMemo(() => {
+    return (
+      state.datasetKind === "structured" && !!structured && !!state.targetColumn
+    );
   }, [state.datasetKind, structured, state.targetColumn]);
 
+  const canRunImages = useMemo(() => {
+    return state.datasetKind === "images" && state.images.length > 0;
+  }, [state.datasetKind, state.images.length]);
+
   /* =========================
-     CORE CLEANING (GENERIC)
-     Runs automatically with your 10 steps in a "silent way"
+     CORE CLEANING (GENERIC) - STRUCTURED
+     ✅ UNCHANGED
   ========================= */
 
   function runGenericPreprocessing() {
@@ -137,9 +247,7 @@ export default function PreprocessingPage() {
     let filledMissing = 0;
     let handledOutliers = 0;
 
-    // -------------------------
-    // 1) Removing Constant Columns
-    // -------------------------
+    // 1) Constant columns
     {
       const toDrop: string[] = [];
 
@@ -158,7 +266,8 @@ export default function PreprocessingPage() {
       }
 
       if (toDrop.length) {
-        for (const c of toDrop) droppedColumns.push({ name: c, reason: "Constant column" });
+        for (const c of toDrop)
+          droppedColumns.push({ name: c, reason: "Constant column" });
 
         columns = columns.filter((c) => !toDrop.includes(c));
         rows = rows.map((r) => {
@@ -169,9 +278,7 @@ export default function PreprocessingPage() {
       }
     }
 
-    // -------------------------
-    // 2) Removing Duplicate Rows
-    // -------------------------
+    // 2) Duplicate rows
     {
       const seen = new Set<string>();
       const nextRows: any[] = [];
@@ -189,9 +296,7 @@ export default function PreprocessingPage() {
       rows = nextRows;
     }
 
-    // -------------------------
-    // 3) Drop Columns if +40% NaNs
-    // -------------------------
+    // 3) Drop columns with 40%+ missing
     {
       const threshold = 0.4;
       const toDrop: string[] = [];
@@ -222,7 +327,7 @@ export default function PreprocessingPage() {
       }
     }
 
-    // Detect numeric / categorical columns
+    // numeric / categorical detect
     const numericCols: string[] = [];
     const categoricalCols: string[] = [];
 
@@ -244,12 +349,8 @@ export default function PreprocessingPage() {
       else categoricalCols.push(col);
     }
 
-    // -------------------------
-    // 4) NaNs Imputation
-    // (numeric -> mean, categorical -> most frequent)
-    // -------------------------
+    // 4) Imputation
     {
-      // numeric mean fill
       for (const col of numericCols) {
         const nums: number[] = [];
         for (const r of rows) {
@@ -266,7 +367,6 @@ export default function PreprocessingPage() {
         }
       }
 
-      // categorical mode fill
       for (const col of categoricalCols) {
         const freq: Record<string, number> = {};
 
@@ -277,7 +377,8 @@ export default function PreprocessingPage() {
           freq[s] = (freq[s] || 0) + 1;
         }
 
-        const mode = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "Unknown";
+        const mode =
+          Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "Unknown";
 
         for (const r of rows) {
           if (isMissing(r[col])) {
@@ -288,11 +389,8 @@ export default function PreprocessingPage() {
       }
     }
 
-    // -------------------------
-    // 5) Removing Outliers (simple capping)
-    // -------------------------
+    // 5) Outliers cap
     {
-      // For simplicity: cap values outside mean ± 4*std
       for (const col of numericCols) {
         const nums: number[] = [];
         for (const r of rows) {
@@ -303,7 +401,8 @@ export default function PreprocessingPage() {
 
         const m = mean(nums);
         const variance =
-          nums.reduce((sum, x) => sum + (x - m) * (x - m), 0) / Math.max(nums.length, 1);
+          nums.reduce((sum, x) => sum + (x - m) * (x - m), 0) /
+          Math.max(nums.length, 1);
         const s = Math.sqrt(variance) || 1;
 
         const lower = m - 4 * s;
@@ -324,9 +423,7 @@ export default function PreprocessingPage() {
       }
     }
 
-    // -------------------------
-    // 6) MinMax scaling (default)
-    // -------------------------
+    // 6) MinMax scaling
     {
       for (const col of numericCols) {
         const nums: number[] = [];
@@ -348,15 +445,7 @@ export default function PreprocessingPage() {
       }
     }
 
-    // -------------------------
-    // 7) Z-score scaling
-    // (we will NOT apply this now, because we already applied MinMax)
-    // -------------------------
-
-    // -------------------------
-    // 8 + 9) Encoding
-    // We will do ONE HOT encoding (simple, limited categories)
-    // -------------------------
+    // 8 + 9) One-hot encoding
     let encodedCategorical = false;
     {
       if (categoricalCols.length > 0) {
@@ -366,7 +455,6 @@ export default function PreprocessingPage() {
         const removeCols: string[] = [];
 
         for (const col of categoricalCols) {
-          // safety limit
           const uniq = new Set<string>();
           for (const r of rows) {
             const v = isMissing(r[col]) ? "Unknown" : String(r[col]);
@@ -382,7 +470,6 @@ export default function PreprocessingPage() {
 
           removeCols.push(col);
 
-          // apply one-hot
           for (const r of rows) {
             const v = isMissing(r[col]) ? "Unknown" : String(r[col]);
             for (const cat of categories) {
@@ -399,22 +486,18 @@ export default function PreprocessingPage() {
       }
     }
 
-    // -------------------------
-    // 10) Remove high correlations (simplified)
-    // For now: we will NOT aggressively drop columns here
-    // (because users may get confused when columns disappear)
-    // We'll keep it "gentle" and safe.
-    // -------------------------
-
     const afterRows = rows.length;
     const afterCols = columns.length;
 
     const notes: string[] = [];
-    if (removedDuplicates > 0) notes.push("Duplicate records were removed to improve data quality.");
+    if (removedDuplicates > 0)
+      notes.push("Duplicate records were removed to improve data quality.");
     if (filledMissing > 0) notes.push("Missing values were filled automatically.");
-    if (handledOutliers > 0) notes.push("Extreme values were adjusted to reduce noise.");
+    if (handledOutliers > 0)
+      notes.push("Extreme values were adjusted to reduce noise.");
     notes.push("Numerical values were normalized to improve model performance.");
-    if (encodedCategorical) notes.push("Text categories were converted into machine-readable format.");
+    if (encodedCategorical)
+      notes.push("Text categories were converted into machine-readable format.");
 
     const summary: SimplePreprocessSummary = {
       beforeRows,
@@ -433,26 +516,126 @@ export default function PreprocessingPage() {
     return { rows, columns, summary };
   }
 
-  const handleStart = async () => {
-    if (!canRun || !structured) return;
+  /* =========================
+     GENERIC IMAGE PREPROCESSING ✅ NEW
+  ========================= */
 
+  async function runGenericImagePreprocessing() {
+    const beforeCount = state.images.length;
+    const targetSize = 224;
+
+    let resizedCount = 0;
+    let skippedNonImages = 0;
+    let removedCorrupted = 0;
+
+    const cleaned: any[] = [];
+
+    for (const item of state.images) {
+      try {
+        if (!item.file || !item.file.type?.startsWith("image/")) {
+          skippedNonImages++;
+          continue;
+        }
+
+        const newFile = await resizeAndNormalizeImage(item.file, targetSize, 0.92);
+        if (!newFile) {
+          removedCorrupted++;
+          continue;
+        }
+
+        resizedCount++;
+
+        cleaned.push({
+          ...item,
+          file: newFile,
+          label: item.label ?? "unknown",
+          relativePath: item.relativePath ?? newFile.name,
+        });
+      } catch {
+        removedCorrupted++;
+      }
+    }
+
+    const afterCount = cleaned.length;
+
+    // ✅ store preview (8 images)
+    setImagePreview(cleaned.slice(0, 8));
+
+    const notes: string[] = [];
+    notes.push("Images were resized into a consistent format for training.");
+    notes.push("Corrupted or unreadable images were removed.");
+    notes.push("Images were standardized to improve model stability.");
+
+    const imageSummary: ImagePreprocessSummary = {
+      beforeCount,
+      afterCount,
+      resizedCount,
+      skippedNonImages,
+      removedCorrupted,
+      targetSize,
+      notes,
+    };
+
+    return { cleaned, imageSummary };
+  }
+
+  /* =========================
+     START BUTTON
+  ========================= */
+
+  const handleStart = async () => {
     setIsRunning(true);
     setDone(false);
     setSummary(null);
+    setImageSummary(null);
+    setImagePreview([]);
 
-    // ✅ show user-friendly "processing" phase
-    setTimeout(() => {
-      const { rows, columns, summary } = runGenericPreprocessing();
+    setTimeout(async () => {
+      // ✅ STRUCTURED
+      if (state.datasetKind === "structured") {
+        if (!canRunStructured || !structured) {
+          setIsRunning(false);
+          return;
+        }
 
-      setStructured({
-        fileName: structured.fileName,
-        rows,
-        columns,
-      });
+        const result = runGenericPreprocessing();
+        if (!result) {
+          setIsRunning(false);
+          return;
+        }
 
-      setSummary(summary);
+        const { rows, columns, summary } = result;
+
+        setStructured({
+          fileName: structured.fileName,
+          rows,
+          columns,
+        });
+
+        setSummary(summary);
+        setIsRunning(false);
+        setDone(true);
+        return;
+      }
+
+      // ✅ IMAGES
+      if (state.datasetKind === "images") {
+        if (!canRunImages) {
+          setIsRunning(false);
+          return;
+        }
+
+        const { cleaned, imageSummary } = await runGenericImagePreprocessing();
+
+        setImages(cleaned);
+        setImageSummary(imageSummary);
+
+        setIsRunning(false);
+        setDone(true);
+        return;
+      }
+
       setIsRunning(false);
-      setDone(true);
     }, 1200);
   };
 
@@ -462,6 +645,10 @@ export default function PreprocessingPage() {
       return [...prev, col];
     });
   };
+
+  /* =========================
+     UI
+  ========================= */
 
   return (
     <main className="w-full">
@@ -485,8 +672,8 @@ export default function PreprocessingPage() {
           </div>
         </div>
 
-        {/* Guard message */}
-        {!canRun && (
+        {/* Guard */}
+        {state.datasetKind === "structured" && !canRunStructured && (
           <div className="aidex-card">
             <p className="aidex-card-title">Before you continue</p>
             <p className="text-sm" style={{ color: "var(--muted)", marginTop: 6 }}>
@@ -501,8 +688,23 @@ export default function PreprocessingPage() {
           </div>
         )}
 
+        {state.datasetKind === "images" && !canRunImages && (
+          <div className="aidex-card">
+            <p className="aidex-card-title">Before you continue</p>
+            <p className="text-sm" style={{ color: "var(--muted)", marginTop: 6 }}>
+              Please make sure you uploaded an image folder dataset first.
+            </p>
+
+            <div style={{ marginTop: 12 }}>
+              <button onClick={() => router.push("/")} className="aidex-btn-primary">
+                Go to Upload
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Start Card */}
-        {canRun && !done && (
+        {!done && (canRunStructured || canRunImages) && (
           <div className="aidex-card">
             <p className="aidex-card-title">Automatic Data Preparation</p>
             <p className="text-sm" style={{ color: "var(--muted)", marginTop: 6 }}>
@@ -528,6 +730,7 @@ export default function PreprocessingPage() {
                 <p className="text-sm" style={{ color: "var(--muted)" }}>
                   Preparing your dataset. Please wait...
                 </p>
+
                 <div
                   style={{
                     marginTop: 10,
@@ -570,8 +773,8 @@ export default function PreprocessingPage() {
           </div>
         )}
 
-        {/* RESULT */}
-        {done && summary && (
+        {/* RESULT (STRUCTURED) ✅ SAME AS YOU */}
+        {done && summary && state.datasetKind === "structured" && (
           <div className="aidex-card">
             <p className="aidex-card-title">Data Preparation Completed</p>
             <p className="text-sm" style={{ color: "var(--muted)", marginTop: 6 }}>
@@ -643,10 +846,16 @@ export default function PreprocessingPage() {
               </div>
             </div>
 
-            {/* Explanation (simple text) */}
             <div style={{ marginTop: 16 }}>
               <p style={{ fontWeight: 800 }}>What AIDEX did for you:</p>
-              <ul style={{ marginTop: 8, paddingLeft: 18, color: "var(--muted)", fontSize: 13 }}>
+              <ul
+                style={{
+                  marginTop: 8,
+                  paddingLeft: 18,
+                  color: "var(--muted)",
+                  fontSize: 13,
+                }}
+              >
                 {summary.notes.map((n, i) => (
                   <li key={i} style={{ marginBottom: 6 }}>
                     {n}
@@ -655,14 +864,20 @@ export default function PreprocessingPage() {
               </ul>
             </div>
 
-            {/* Dropped Columns */}
             {summary.droppedColumns.length > 0 && (
               <div style={{ marginTop: 16 }}>
                 <p style={{ fontWeight: 800 }}>
                   Columns removed to improve quality (review):
                 </p>
 
-                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+                <div
+                  style={{
+                    marginTop: 10,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                  }}
+                >
                   {summary.droppedColumns.map((c) => (
                     <div
                       key={c.name}
@@ -680,7 +895,13 @@ export default function PreprocessingPage() {
                     >
                       <div>
                         <p style={{ fontWeight: 900 }}>{c.name}</p>
-                        <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
+                        <p
+                          style={{
+                            fontSize: 13,
+                            color: "var(--muted)",
+                            marginTop: 4,
+                          }}
+                        >
                           Reason: {c.reason}
                         </p>
                       </div>
@@ -704,12 +925,163 @@ export default function PreprocessingPage() {
                   ))}
                 </div>
 
-                <p className="text-xs" style={{ color: "var(--muted)", marginTop: 10 }}>
+                <p
+                  className="text-xs"
+                  style={{ color: "var(--muted)", marginTop: 10 }}
+                >
                   If you marked a column as important, upload again or re-run preparation later and AIDEX will protect it.
                 </p>
               </div>
             )}
+          </div>
+        )}
 
+        {/* RESULT (IMAGES) ✅ NEW + PREVIEW GRID */}
+        {done && imageSummary && state.datasetKind === "images" && (
+          <div className="aidex-card">
+            <p className="aidex-card-title">Image Preparation Completed</p>
+            <p className="text-sm" style={{ color: "var(--muted)", marginTop: 6 }}>
+              AIDEX prepared your images so they become consistent and ready for training.
+            </p>
+
+            <div
+              style={{
+                marginTop: 14,
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  borderRadius: 14,
+                  border: "1px solid var(--border)",
+                  background: "rgba(15, 23, 42, 0.03)",
+                  padding: 14,
+                }}
+              >
+                <p style={{ fontSize: 12, color: "var(--muted)" }}>Images</p>
+                <p style={{ fontSize: 18, fontWeight: 800 }}>
+                  {imageSummary.beforeCount} → {imageSummary.afterCount}
+                </p>
+              </div>
+
+              <div
+                style={{
+                  borderRadius: 14,
+                  border: "1px solid var(--border)",
+                  background: "rgba(15, 23, 42, 0.03)",
+                  padding: 14,
+                }}
+              >
+                <p style={{ fontSize: 12, color: "var(--muted)" }}>Resized</p>
+                <p style={{ fontSize: 18, fontWeight: 800 }}>
+                  {imageSummary.resizedCount}
+                </p>
+              </div>
+
+              <div
+                style={{
+                  borderRadius: 14,
+                  border: "1px solid var(--border)",
+                  background: "rgba(15, 23, 42, 0.03)",
+                  padding: 14,
+                }}
+              >
+                <p style={{ fontSize: 12, color: "var(--muted)" }}>Removed corrupted</p>
+                <p style={{ fontSize: 18, fontWeight: 800 }}>
+                  {imageSummary.removedCorrupted}
+                </p>
+              </div>
+
+              <div
+                style={{
+                  borderRadius: 14,
+                  border: "1px solid var(--border)",
+                  background: "rgba(15, 23, 42, 0.03)",
+                  padding: 14,
+                }}
+              >
+                <p style={{ fontSize: 12, color: "var(--muted)" }}>Image size</p>
+                <p style={{ fontSize: 18, fontWeight: 800 }}>
+                  {imageSummary.targetSize} × {imageSummary.targetSize}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <p style={{ fontWeight: 800 }}>What AIDEX did for you:</p>
+              <ul
+                style={{
+                  marginTop: 8,
+                  paddingLeft: 18,
+                  color: "var(--muted)",
+                  fontSize: 13,
+                }}
+              >
+                {imageSummary.notes.map((n, i) => (
+                  <li key={i} style={{ marginBottom: 6 }}>
+                    {n}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* ✅ IMAGE PREVIEW GRID */}
+            {imagePreview.length > 0 && (
+              <div style={{ marginTop: 18 }}>
+                <p style={{ fontWeight: 800 }}>Preview (after preparation):</p>
+
+                <div
+                  style={{
+                    marginTop: 10,
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                    gap: 12,
+                  }}
+                >
+                  {imagePreview.map((img, idx) => (
+                    <div
+                      key={img.relativePath ?? idx}
+                      style={{
+                        borderRadius: 14,
+                        border: "1px solid var(--border)",
+                        background: "rgba(15, 23, 42, 0.03)",
+                        padding: 10,
+                      }}
+                    >
+                      <img
+                        src={URL.createObjectURL(img.file)}
+                        alt={img.file?.name ?? "image"}
+                        style={{
+                          width: "100%",
+                          height: 100,
+                          objectFit: "cover",
+                          borderRadius: 10,
+                        }}
+                      />
+
+                      <p
+                        style={{
+                          marginTop: 8,
+                          fontSize: 11,
+                          color: "var(--muted)",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {img.label ?? "unknown"} • {img.file?.name ?? "image"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-xs" style={{ color: "var(--muted)", marginTop: 10 }}>
+                  Showing 8 prepared samples.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

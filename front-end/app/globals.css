@@ -34,8 +34,13 @@ body {
 
 .aidex-page {
   flex: 1;
-  padding: 24px;
+  padding: 32px;
+  color: white;
+  background: transparent;
+  display: flex;
+  justify-content: center;
 }
+
 
 /* =========================
    MODERN SIDEBAR

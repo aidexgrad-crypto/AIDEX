@@ -20,16 +20,20 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   if (isAuthPage) return <>{children}</>;
 
   return (
-    <div className="min-h-screen bg-[#0b1020] text-white flex">
-      {/* Sidebar */}
-      <Sidebar />
+  <div className="min-h-screen bg-[#0b1020] text-white flex">
+    {/* Sidebar */}
+    <Sidebar />
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col">
-        <Topbar />
+    {/* Main */}
+    <div className="flex-1 flex flex-col">
+      <Topbar />
 
-        <div className="p-10">{children}</div>
+      <div className="aidex-page">
+        <div className="w-full max-w-5xl">
+          {children}
+        </div>
       </div>
     </div>
-  );
+  </div>
+);
 }
