@@ -1,23 +1,8 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-
-
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
-
-:root {
-  --bg: #eef3f9;
-  --panel: #ffffff;
-  --border: rgba(15, 23, 42, 0.12);
-  --text: #0f172a;
-  --muted: rgba(15, 23, 42, 0.65);
-
-  --primary: #1e5eff;
-  --primaryHover: #184fe0;
-
-  --shadow: 0 10px 35px rgba(2, 8, 23, 0.08);
-}
 
 * {
   box-sizing: border-box;
@@ -27,174 +12,225 @@
 
 body {
   font-family: "Inter", sans-serif;
-  background: var(--bg);
-  color: var(--text);
+  background: #0b1020;
+  color: white;
 }
 
 /* =========================
-   LAYOUT SHELL
+   NEW MODERN DASHBOARD SHELL
 ========================= */
-.aidex-app-shell {
+.aidex-shell {
   display: flex;
   min-height: 100vh;
+  background: radial-gradient(circle at top left, #111827, #0b1020 60%, #060914);
 }
 
-.aidex-sidebar {
-  width: 260px;
-  background: #163b7a;
-  color: white;
-  padding: 20px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.aidex-sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 10px;
-}
-
-.aidex-logo-box {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.15);
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 16px;
-}
-
-.aidex-brand {
-  font-weight: 700;
-  font-size: 16px;
-  line-height: 1.1;
-}
-
-.aidex-subtitle {
-  font-size: 11px;
-  opacity: 0.8;
-  margin-top: 2px;
-}
-
-.aidex-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.aidex-nav-item {
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  padding: 12px 12px;
-  border-radius: 12px;
-  background: transparent;
-  color: white;
-  font-size: 14px;
-  transition: 0.2s;
-}
-
-.aidex-nav-item:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.aidex-nav-item.active {
-  background: rgba(255, 255, 255, 0.2);
-  font-weight: 600;
-}
-
-/* =========================
-   MAIN CONTENT
-========================= */
-.aidex-main {
+.aidex-body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
 }
 
-.aidex-topbar {
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  padding: 14px 22px;
+.aidex-page {
+  flex: 1;
+  padding: 24px;
 }
 
-.aidex-topbar-inner {
+/* =========================
+   MODERN SIDEBAR
+========================= */
+.aidex-sidebar2 {
+  width: 280px;
+  min-height: 100vh;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.aidex-sidebar2-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.aidex-logo2 {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: white;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(236, 72, 153, 0.85));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+}
+
+.aidex-brand2 {
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+}
+
+.aidex-subtitle2 {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 2px;
+}
+
+.aidex-nav2 {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.aidex-nav2-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 16px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.aidex-nav2-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.aidex-nav2-item.active {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  color: white;
+}
+
+.aidex-active-pill {
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: rgba(199, 210, 254, 0.95);
+  background: rgba(99, 102, 241, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.aidex-sidebar2-footer {
+  margin-top: auto;
+}
+
+.aidex-tip {
+  border-radius: 18px;
+  padding: 14px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* =========================
+   MODERN TOPBAR
+========================= */
+.aidex-topbar2 {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 14px 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.aidex-topbar2-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.aidex-topbar-title {
-  font-weight: 700;
-  font-size: 16px;
+.aidex-top-title {
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.3px;
 }
 
-.aidex-topbar-actions {
+.aidex-top-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 2px;
+}
+
+.aidex-top-actions {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.aidex-content {
-  padding: 24px;
+.aidex-userpill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: 0.2s;
 }
 
-/* =========================
-   BUTTONS
-========================= */
-.aidex-btn-primary {
+.aidex-userpill:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.aidex-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 12px;
+  color: black;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(34, 211, 238, 0.8));
+}
+
+.aidex-email {
+  font-size: 12px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.aidex-logout {
   border: none;
   cursor: pointer;
-  background: var(--primary);
-  color: white;
-  font-weight: 600;
   padding: 10px 16px;
-  border-radius: 12px;
-  transition: 0.2s;
-}
-
-.aidex-btn-primary:hover {
-  background: var(--primaryHover);
-}
-
-.aidex-btn-outline {
-  border: 1px solid var(--border);
-  cursor: pointer;
-  background: white;
-  color: var(--text);
-  font-weight: 600;
-  padding: 10px 14px;
-  border-radius: 12px;
-  transition: 0.2s;
-}
-
-.aidex-btn-outline:hover {
-  background: rgba(15, 23, 42, 0.04);
-}
-
-/* =========================
-   CARD (Professional panels)
-========================= */
-.aidex-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: var(--shadow);
-  padding: 18px;
-}
-
-.aidex-card-title {
-  font-weight: 700;
-  font-size: 16px;
-  margin-bottom: 6px;
-}
-
-.aidex-card-subtitle {
+  background: white;
+  color: #0b1020;
+  font-weight: 800;
   font-size: 13px;
-  color: var(--muted);
+  transition: 0.2s;
 }
 
+.aidex-logout:hover {
+  opacity: 0.9;
+}

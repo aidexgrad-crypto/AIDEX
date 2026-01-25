@@ -1,4 +1,4 @@
- "use client";
+"use client";
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -11,22 +11,24 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
   const isAuthPage = pathname === "/auth";
 
-  // Protect pages except /auth
   useEffect(() => {
     if (isAuthPage) return;
     const isAuthed = localStorage.getItem("aidex_auth") === "true";
     if (!isAuthed) router.replace("/auth");
   }, [isAuthPage, router]);
 
-  // Auth page should NOT show sidebar/topbar
   if (isAuthPage) return <>{children}</>;
 
   return (
-    <div className="aidex-app-shell">
+    <div className="min-h-screen bg-[#0b1020] text-white flex">
+      {/* Sidebar */}
       <Sidebar />
-      <div className="aidex-main">
+
+      {/* Main */}
+      <div className="flex-1 flex flex-col">
         <Topbar />
-        <div className="aidex-content">{children}</div>
+
+        <div className="p-10">{children}</div>
       </div>
     </div>
   );
