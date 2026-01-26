@@ -4,10 +4,12 @@ import ClientShell from "./ClientShell";
 
 export default function RootLayout({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
-      <body>
+      <body className="bg-[#0b1020] text-white min-h-screen">
         <DatasetProvider>
           <ClientShell>{children}</ClientShell>
         </DatasetProvider>

@@ -356,144 +356,170 @@ export default function OverviewPage() {
   const canContinueStructured =
     !!structured && !!state.targetColumn && !!state.taskChoice;
 
-  return (
-    <main className="w-full">
-      <div className="max-w-6xl">
-        <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-3xl font-bold">Data Overview</h1>
-            <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>
-              Preview your dataset and select your prediction goal.
-            </p>
-          </div>
+ return (
+  <main className="w-full">
+    <div className="max-w-6xl w-full space-y-8 pb-32">
+      {/* =========================
+          HEADER
+      ========================= */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold">Data Overview</h1>
+          <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>
+            Preview your dataset and select your prediction goal.
+          </p>
+        </div>
 
+        <div className="flex items-center gap-2 flex-wrap">
           <button onClick={resetPage2} className="aidex-btn-outline">
             Reset & Upload Again
           </button>
         </div>
+      </div>
 
-        {/* =========================
-            STRUCTURED OVERVIEW
-        ========================= */}
-        {state.datasetKind === "structured" && structured && (
-          <div className="space-y-5">
-            {/* Dataset info */}
-            <div className="aidex-card">
+      {/* =========================
+          STRUCTURED OVERVIEW
+      ========================= */}
+      {state.datasetKind === "structured" && structured && (
+        <div className="space-y-8">
+          {/* Dataset info */}
+          <div className="aidex-card" style={{ padding: 18 }}>
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <p className="aidex-card-title">Dataset Preview</p>
+                <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
+                  File: <b style={{ color: "var(--text)" }}>{structured.fileName}</b>{" "}
+                  • Rows: <b style={{ color: "var(--text)" }}>{structured.rows.length}</b>{" "}
+                  • Columns:{" "}
+                  <b style={{ color: "var(--text)" }}>{structured.columns.length}</b>
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowExplanationModal(true)}
+                className="aidex-btn-outline"
+              >
+                View details
+              </button>
+            </div>
+          </div>
+
+          {/* Recommended target */}
+          {targetRecommendation && (
+            <div className="aidex-card" style={{ padding: 18 }}>
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                  <p className="aidex-card-title">Dataset Preview</p>
-                  <p className="text-sm" style={{ color: "var(--muted)" }}>
-                    File: {structured.fileName} • Rows: {structured.rows.length} •
-                    Columns: {structured.columns.length}
+                  <p className="aidex-card-title">Recommended Target</p>
+                  <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
+                    Suggested column to predict:{" "}
+                    <b style={{ color: "var(--text)" }}>
+                      {targetRecommendation.target}
+                    </b>
                   </p>
                 </div>
 
                 <button
-                  onClick={() => setShowExplanationModal(true)}
-                  className="aidex-btn-outline"
+                  onClick={() => setTargetColumn(targetRecommendation.target)}
+                  className="aidex-btn-primary"
                 >
-                  View more explanation
+                  Use Recommendation
                 </button>
               </div>
-            </div>
 
-            {/* Recommended target */}
-            {targetRecommendation && (
-              <div className="aidex-card">
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div>
-                    <p className="aidex-card-title">Recommended Target</p>
-                    <p className="text-sm" style={{ color: "var(--muted)" }}>
-                      Suggested column to predict:{" "}
-                      <b style={{ color: "var(--text)" }}>
-                        {targetRecommendation.target}
-                      </b>
-                    </p>
-                  </div>
+              <div className="mt-4">
+                <p style={{ fontWeight: 800, fontSize: 13, marginBottom: 10 }}>
+                  Why this is a good target:
+                </p>
 
-                  <button
-                    onClick={() => setTargetColumn(targetRecommendation.target)}
-                    className="aidex-btn-primary"
-                  >
-                    Use Recommendation
-                  </button>
-                </div>
-
-                <div className="mt-4">
-                  <p style={{ fontWeight: 700, fontSize: 13 }}>
-                    Why this is a good target:
-                  </p>
-                  <ul
-                    style={{
-                      marginTop: 8,
-                      paddingLeft: 18,
-                      color: "var(--muted)",
-                      fontSize: 13,
-                    }}
-                  >
-                    {targetRecommendation.reasons.slice(0, 5).map((r, idx) => (
-                      <li key={idx} style={{ marginBottom: 4 }}>
-                        {r}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <ul
+                  style={{
+                    paddingLeft: 18,
+                    color: "var(--muted)",
+                    fontSize: 13,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  {targetRecommendation.reasons.slice(0, 5).map((r, idx) => (
+                    <li key={idx}>{r}</li>
+                  ))}
+                </ul>
               </div>
-            )}
-
-            {/* Target explanation */}
-            <div className="aidex-card">
-              <p className="aidex-card-title">What is the Target?</p>
-              <p className="text-sm" style={{ color: "var(--muted)" }}>
-                The target is the column you want AIDEX to predict for new rows.
-              </p>
             </div>
+          )}
 
+          {/* Target + Task grid */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+              gap: 18,
+              alignItems: "start",
+            }}
+          >
             {/* Choose target */}
-            <div className="aidex-card">
-              <p className="aidex-card-title">Choose Target (Manual)</p>
+            <div className="aidex-card" style={{ padding: 18 }}>
+              <p className="aidex-card-title">Choose Target</p>
+              <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
+                The target is the column AIDEX will predict.
+              </p>
+
               <select
                 value={state.targetColumn}
                 onChange={(e) => setTargetColumn(e.target.value)}
                 style={{
-                  marginTop: 10,
+                  marginTop: 14,
                   width: "100%",
-                  maxWidth: 420,
-                  borderRadius: 12,
-                  border: "1px solid var(--border)",
-                  padding: "10px 12px",
+                  borderRadius: 14,
+                  border: "1px solid rgba(255,255,255,0.14)",
+                  padding: "11px 12px",
                   outline: "none",
                   fontSize: 14,
+                  background: "rgba(255,255,255,0.08)",
+                  color: "white",
                 }}
               >
                 <option value="">-- Choose target --</option>
                 {structured.columns.map((col) => (
-                  <option key={col} value={col}>
+                  <option key={col} value={col} style={{ color: "#0b1020" }}>
                     {col}
                   </option>
                 ))}
               </select>
 
               {state.targetColumn && (
-                <p className="text-sm" style={{ marginTop: 10, color: "var(--muted)" }}>
-                  Target selected:{" "}
-                  <b style={{ color: "var(--text)" }}>{state.targetColumn}</b>
-                </p>
+                <div
+                  style={{
+                    marginTop: 14,
+                    borderRadius: 14,
+                    border: "1px solid rgba(255,255,255,0.14)",
+                    background: "rgba(255,255,255,0.06)",
+                    padding: 14,
+                  }}
+                >
+                  <p className="text-sm" style={{ color: "var(--muted)" }}>
+                    Selected:
+                  </p>
+                  <p style={{ fontWeight: 900, marginTop: 4 }}>
+                    {state.targetColumn}
+                  </p>
+                </div>
               )}
             </div>
 
             {/* Task selection */}
-            <div className="aidex-card">
+            <div className="aidex-card" style={{ padding: 18 }}>
               <p className="aidex-card-title">Select Analysis Type</p>
-              <p className="text-sm" style={{ color: "var(--muted)" }}>
-                Choose the option that matches your goal.
+              <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
+                Choose what you want AIDEX to predict.
               </p>
 
               <div
                 style={{
                   marginTop: 14,
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                  display: "flex",
+                  flexDirection: "column",
                   gap: 14,
                 }}
               >
@@ -501,20 +527,25 @@ export default function OverviewPage() {
                   onClick={() => setTaskChoice("predictCategory")}
                   style={{
                     textAlign: "left",
-                    borderRadius: 16,
+                    borderRadius: 18,
                     border:
                       state.taskChoice === "predictCategory"
                         ? `2px solid var(--primary)`
-                        : "1px solid var(--border)",
-                    background: "white",
+                        : "1px solid rgba(255,255,255,0.14)",
+                    background:
+                      state.taskChoice === "predictCategory"
+                        ? "rgba(99,102,241,0.15)"
+                        : "rgba(255,255,255,0.06)",
                     padding: 16,
                     cursor: "pointer",
                     transition: "0.2s",
                   }}
                 >
-                  <p style={{ fontWeight: 700 }}>Predict a category / label</p>
+                  <p style={{ fontWeight: 900, color: "white" }}>
+                    Predict a category / label
+                  </p>
                   <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 6 }}>
-                    Example: Fraud/Not Fraud, Survived/Not Survived
+                    Example: Fraud / Not Fraud, Survived / Not Survived
                   </p>
                 </button>
 
@@ -522,301 +553,348 @@ export default function OverviewPage() {
                   onClick={() => setTaskChoice("predictNumber")}
                   style={{
                     textAlign: "left",
-                    borderRadius: 16,
+                    borderRadius: 18,
                     border:
                       state.taskChoice === "predictNumber"
                         ? `2px solid var(--primary)`
-                        : "1px solid var(--border)",
-                    background: "white",
+                        : "1px solid rgba(255,255,255,0.14)",
+                    background:
+                      state.taskChoice === "predictNumber"
+                        ? "rgba(99,102,241,0.15)"
+                        : "rgba(255,255,255,0.06)",
                     padding: 16,
                     cursor: "pointer",
                     transition: "0.2s",
                   }}
                 >
-                  <p style={{ fontWeight: 700 }}>Predict a number</p>
+                  <p style={{ fontWeight: 900, color: "white" }}>
+                    Predict a number
+                  </p>
                   <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 6 }}>
                     Example: Price, Salary, Score
                   </p>
                 </button>
+
+                {!canContinueStructured && (
+                  <p className="text-xs" style={{ color: "var(--muted)" }}>
+                    Select target + prediction type to continue.
+                  </p>
+                )}
               </div>
-            </div>
-
-            {/* Table */}
-            <div className="aidex-card" style={{ padding: 0, overflow: "hidden" }}>
-              <div style={{ padding: 16, borderBottom: "1px solid var(--border)" }}>
-                <p style={{ fontWeight: 700 }}>Preview Table</p>
-              </div>
-
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead style={{ background: "rgba(15, 23, 42, 0.03)" }}>
-                    <tr>
-                      {structured.columns.map((col) => (
-                        <th
-                          key={col}
-                          style={{
-                            textAlign: "left",
-                            padding: "10px 12px",
-                            fontWeight: 700,
-                            borderBottom: "1px solid var(--border)",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {col}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {structuredPreviewRows.map((row, i) => (
-                      <tr key={i}>
-                        {structured.columns.map((col) => (
-                          <td
-                            key={col}
-                            style={{
-                              padding: "10px 12px",
-                              borderBottom: "1px solid var(--border)",
-                              whiteSpace: "nowrap",
-                              color: "rgba(15, 23, 42, 0.85)",
-                            }}
-                          >
-                            {row[col] === null || row[col] === undefined
-                              ? ""
-                              : String(row[col])}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Continue */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <button
-                disabled={!canContinueStructured}
-                onClick={() => router.push("/preprocessing")}
-                className="aidex-btn-primary"
-                style={{
-                  opacity: canContinueStructured ? 1 : 0.45,
-                  cursor: canContinueStructured ? "pointer" : "not-allowed",
-                }}
-              >
-                Continue
-              </button>
-
-              {!canContinueStructured && (
-                <p className="text-xs" style={{ color: "var(--muted)" }}>
-                  Select target + prediction type to continue.
-                </p>
-              )}
             </div>
           </div>
-        )}
 
-        {/* =========================
-            IMAGE OVERVIEW
-        ========================= */}
-        {state.datasetKind === "images" && relabeledImages.length > 0 && (
-          <div className="space-y-5">
-            <div className="aidex-card">
-              <p className="aidex-card-title">Image Dataset Summary</p>
+          {/* Table */}
+          <div className="aidex-card" style={{ padding: 0, overflow: "hidden" }}>
+            <div
+              style={{
+                padding: 18,
+                borderBottom: "1px solid rgba(255,255,255,0.12)",
+              }}
+            >
+              <p className="aidex-card-title">Preview Table</p>
+              <p className="text-sm" style={{ color: "var(--muted)", marginTop: 4 }}>
+                Showing first 10 rows from your CSV.
+              </p>
+            </div>
 
-              <div
-                style={{
-                  marginTop: 12,
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                  gap: 12,
-                }}
-              >
-                {[
-                  ["Total images uploaded", imageStats.totalImages],
-                  ["Total classes", imageStats.totalClasses],
-                  ["Largest class count", imageStats.largestClassCount],
-                  ["Smallest class count", imageStats.smallestClassCount],
-                ].map(([label, value]) => (
-                  <div
-                    key={String(label)}
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead style={{ background: "rgba(255,255,255,0.06)" }}>
+                  <tr>
+                    {structured.columns.map((col) => (
+                      <th
+                        key={col}
+                        style={{
+                          textAlign: "left",
+                          padding: "12px 14px",
+                          fontWeight: 800,
+                          color: "white",
+                          borderBottom: "1px solid rgba(255,255,255,0.12)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {structuredPreviewRows.map((row, i) => (
+                    <tr key={i}>
+                      {structured.columns.map((col) => (
+                        <td
+                          key={col}
+                          style={{
+                            padding: "12px 14px",
+                            borderBottom: "1px solid rgba(255,255,255,0.08)",
+                            whiteSpace: "nowrap",
+                            color: "rgba(255,255,255,0.88)",
+                          }}
+                        >
+                          {row[col] === null || row[col] === undefined ? "" : String(row[col])}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ✅ Continue button AFTER TABLE (CENTERED) */}
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
+            <button
+              disabled={!canContinueStructured}
+              onClick={() => router.push("/preprocessing")}
+              className="aidex-btn-primary"
+              style={{
+                width: "100%",
+                maxWidth: 420,
+                padding: "14px 18px",
+                borderRadius: 18,
+                opacity: canContinueStructured ? 1 : 0.45,
+                cursor: canContinueStructured ? "pointer" : "not-allowed",
+              }}
+            >
+              Continue to Preprocessing
+            </button>
+          </div>
+
+          {/* BIG bottom space ✅ */}
+          <div style={{ height: 60 }} />
+        </div>
+      )}
+
+      {/* =========================
+          IMAGE OVERVIEW
+      ========================= */}
+      {state.datasetKind === "images" && relabeledImages.length > 0 && (
+        <div className="space-y-8">
+          <div className="aidex-card" style={{ padding: 18 }}>
+            <p className="aidex-card-title">Image Dataset Summary</p>
+
+            <div
+              style={{
+                marginTop: 16,
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: 16,
+              }}
+            >
+              {[
+                ["Total images uploaded", imageStats.totalImages],
+                ["Total classes", imageStats.totalClasses],
+                ["Largest class count", imageStats.largestClassCount],
+                ["Smallest class count", imageStats.smallestClassCount],
+              ].map(([label, value]) => (
+                <div
+                  key={String(label)}
+                  style={{
+                    borderRadius: 16,
+                    border: "1px solid rgba(255,255,255,0.14)",
+                    background: "rgba(255,255,255,0.06)",
+                    padding: 16,
+                  }}
+                >
+                  <p style={{ fontSize: 12, color: "var(--muted)" }}>{label}</p>
+                  <p style={{ fontSize: 20, fontWeight: 900, marginTop: 6 }}>{value}</p>
+                </div>
+              ))}
+            </div>
+
+            {imageStats.totalClasses > 1 && (
+              <p className="text-sm" style={{ marginTop: 14, color: "var(--muted)" }}>
+                Balance ratio: {imageStats.imbalanceRatio.toFixed(2)}x
+              </p>
+            )}
+          </div>
+
+          <div className="aidex-card" style={{ padding: 18 }}>
+            <p className="aidex-card-title">Class Distribution</p>
+            <div style={{ marginTop: 12, color: "var(--muted)", fontSize: 13 }}>
+              {sortDistribution(imageClassDist).map(([label, count]) => (
+                <p key={label} style={{ marginBottom: 8 }}>
+                  <b style={{ color: "var(--text)" }}>{label}</b>: {count}
+                </p>
+              ))}
+            </div>
+          </div>
+
+          <div className="aidex-card" style={{ padding: 18 }}>
+            <p className="aidex-card-title">Preview</p>
+
+            <div
+              style={{
+                marginTop: 16,
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                gap: 14,
+              }}
+            >
+              {imagePreview.map((img) => (
+                <div
+                  key={img.relativePath}
+                  style={{
+                    borderRadius: 16,
+                    border: "1px solid rgba(255,255,255,0.14)",
+                    background: "rgba(255,255,255,0.06)",
+                    padding: 10,
+                  }}
+                >
+                  <img
+                    src={URL.createObjectURL((img as any).file)}
+                    alt={(img as any).file.name}
                     style={{
+                      width: "100%",
+                      height: 100,
+                      objectFit: "cover",
                       borderRadius: 14,
-                      border: "1px solid var(--border)",
-                      background: "rgba(15, 23, 42, 0.03)",
+                    }}
+                  />
+                  <p
+                    style={{
+                      marginTop: 8,
+                      fontSize: 11,
+                      color: "var(--muted)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {(img as any).label} • {(img as any).file.name}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs" style={{ marginTop: 12, color: "var(--muted)" }}>
+              Showing 12 samples (balanced preview).
+            </p>
+
+            <div style={{ marginTop: 18, display: "flex", justifyContent: "center" }}>
+              <button
+                onClick={() => router.push("/preprocessing")}
+                className="aidex-btn-primary"
+                style={{ width: "100%", maxWidth: 420, padding: "14px 18px" }}
+              >
+                Continue to Preprocessing
+              </button>
+            </div>
+          </div>
+
+          <div style={{ height: 60 }} />
+        </div>
+      )}
+
+      {/* =========================
+          MODAL (VIEW DETAILS)
+      ========================= */}
+      {showExplanationModal && state.datasetKind === "structured" && structured && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 999,
+            background: "rgba(0,0,0,0.70)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 18,
+          }}
+          onClick={() => setShowExplanationModal(false)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 980,
+              maxHeight: "85vh",
+              borderRadius: 22,
+              overflow: "hidden",
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "#0b1020", // ✅ NOT transparent anymore
+              boxShadow: "0 30px 80px rgba(0,0,0,0.65)",
+              padding: 18,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <h3 style={{ fontSize: 18, fontWeight: 900, color: "white" }}>
+                  Detected Columns
+                </h3>
+                <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.65)" }}>
+                  Column types, missing values, and unique counts.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowExplanationModal(false)}
+                className="aidex-btn-outline"
+              >
+                Close
+              </button>
+            </div>
+
+            <div
+              style={{
+                marginTop: 14,
+                maxHeight: "62vh",
+                overflowY: "auto",
+                borderRadius: 16,
+                border: "1px solid rgba(255,255,255,0.12)",
+                padding: 12,
+                background: "rgba(255,255,255,0.04)", // ✅ readable container
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {columnAnalysis.map((c) => (
+                  <div
+                    key={c.name}
+                    style={{
+                      borderRadius: 16,
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      background: "rgba(255,255,255,0.06)",
                       padding: 14,
                     }}
                   >
-                    <p style={{ fontSize: 12, color: "var(--muted)" }}>{label}</p>
-                    <p style={{ fontSize: 18, fontWeight: 800 }}>{value}</p>
-                  </div>
-                ))}
-              </div>
-
-              {imageStats.totalClasses > 1 && (
-                <p className="text-sm" style={{ marginTop: 12, color: "var(--muted)" }}>
-                  Balance ratio: {imageStats.imbalanceRatio.toFixed(2)}x
-                </p>
-              )}
-            </div>
-
-            <div className="aidex-card">
-              <p className="aidex-card-title">Class Distribution</p>
-              <div style={{ marginTop: 10, color: "var(--muted)", fontSize: 13 }}>
-                {sortDistribution(imageClassDist).map(([label, count]) => (
-                  <p key={label} style={{ marginBottom: 6 }}>
-                    <b style={{ color: "var(--text)" }}>{label}</b>: {count}
-                  </p>
-                ))}
-              </div>
-            </div>
-
-            <div className="aidex-card">
-              <p className="aidex-card-title">Preview</p>
-
-              <div
-                style={{
-                  marginTop: 12,
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
-                  gap: 10,
-                }}
-              >
-                {imagePreview.map((img) => (
-                  <div
-                    key={img.relativePath}
-                    style={{
-                      borderRadius: 14,
-                      border: "1px solid var(--border)",
-                      background: "rgba(15, 23, 42, 0.03)",
-                      padding: 8,
-                    }}
-                  >
-                    <img
-                      src={URL.createObjectURL((img as any).file)}
-                      alt={(img as any).file.name}
-                      style={{
-                        width: "100%",
-                        height: 80,
-                        objectFit: "cover",
-                        borderRadius: 10,
-                      }}
-                    />
-                    <p
-                      style={{
-                        marginTop: 6,
-                        fontSize: 11,
-                        color: "var(--muted)",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {(img as any).label} • {(img as any).file.name}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              <p className="text-xs" style={{ marginTop: 10, color: "var(--muted)" }}>
-                Showing first 12 samples (balanced preview).
-              </p>
-            </div>
-
-            <button
-              onClick={() => router.push("/preprocessing")}
-              className="aidex-btn-primary"
-            >
-              Continue
-            </button>
-          </div>
-        )}
-
-        {/* MODAL */}
-        {showExplanationModal && state.datasetKind === "structured" && structured && (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 999,
-              background: "rgba(2, 8, 23, 0.45)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 20,
-            }}
-            onClick={() => setShowExplanationModal(false)}
-          >
-            <div
-              className="aidex-card"
-              style={{ width: "100%", maxWidth: 900 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 style={{ fontSize: 18, fontWeight: 800 }}>
-                    Detected Columns
-                  </h3>
-                  <p className="text-sm" style={{ color: "var(--muted)" }}>
-                    Column types, missing values, and unique counts.
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => setShowExplanationModal(false)}
-                  className="aidex-btn-outline"
-                >
-                  Close
-                </button>
-              </div>
-
-              <div
-                style={{
-                  marginTop: 16,
-                  maxHeight: "60vh",
-                  overflow: "auto",
-                  borderRadius: 16,
-                  border: "1px solid var(--border)",
-                  padding: 12,
-                }}
-              >
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {columnAnalysis.map((c) => (
-                    <div
-                      key={c.name}
-                      style={{
-                        borderRadius: 16,
-                        border: "1px solid var(--border)",
-                        background: "rgba(15, 23, 42, 0.03)",
-                        padding: 14,
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-4 flex-wrap">
-                        <p style={{ fontWeight: 800 }}>{c.name}</p>
-                        <p className="text-sm" style={{ color: "var(--muted)" }}>
-                          Type: <b style={{ color: "var(--text)" }}>{c.type}</b> | Missing:{" "}
-                          <b style={{ color: "var(--text)" }}>{c.missing}</b> | Unique:{" "}
-                          <b style={{ color: "var(--text)" }}>{c.unique}</b>
-                        </p>
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                      <div>
+                        <p style={{ fontWeight: 900, color: "white" }}>{c.name}</p>
+                        {c.exampleValues.length > 0 && (
+                          <p
+                            className="text-xs"
+                            style={{ color: "rgba(255,255,255,0.65)", marginTop: 6 }}
+                          >
+                            Examples: {c.exampleValues.join(" | ")}
+                          </p>
+                        )}
                       </div>
 
-                      {c.exampleValues.length > 0 && (
-                        <p className="text-xs" style={{ color: "var(--muted)", marginTop: 8 }}>
-                          Examples: {c.exampleValues.join(" | ")}
+                      <div style={{ textAlign: "right" }}>
+                        <p className="text-sm" style={{ color: "rgba(255,255,255,0.65)" }}>
+                          Type: <b style={{ color: "white" }}>{c.type}</b>
                         </p>
-                      )}
+                        <p className="text-sm" style={{ color: "rgba(255,255,255,0.65)" }}>
+                          Missing: <b style={{ color: "white" }}>{c.missing}</b>{" "}
+                          • Unique: <b style={{ color: "white" }}>{c.unique}</b>
+                        </p>
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-
-              <p className="text-xs" style={{ color: "var(--muted)", marginTop: 14 }}>
-                Tip: These types are detected automatically and will be used later
-                for preprocessing.
-              </p>
             </div>
+
+            <p className="text-xs" style={{ color: "rgba(255,255,255,0.65)", marginTop: 12 }}>
+              Tip: These types are detected automatically and will be used later for preprocessing.
+            </p>
           </div>
-        )}
-      </div>
-    </main>
-  );
+        </div>
+      )}
+    </div>
+  </main>
+);
+
+
 }

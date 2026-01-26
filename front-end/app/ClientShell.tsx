@@ -20,20 +20,22 @@ export default function ClientShell({ children }: { children: React.ReactNode })
   if (isAuthPage) return <>{children}</>;
 
   return (
-  <div className="min-h-screen bg-[#0b1020] text-white flex">
+  <div className="flex min-h-screen w-full bg-[#0b1020] text-white">
     {/* Sidebar */}
     <Sidebar />
 
-    {/* Main */}
-    <div className="flex-1 flex flex-col">
+    {/* Main area */}
+    <div className="flex flex-col flex-1 min-w-0">
       <Topbar />
 
-      <div className="aidex-page">
-        <div className="w-full max-w-5xl">
+      {/* ✅ Page container like before (not too wide, not too padded) */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-6xl px-6 py-6">
           {children}
         </div>
-      </div>
+      </main>
     </div>
   </div>
 );
+
 }

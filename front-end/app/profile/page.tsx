@@ -1,7 +1,9 @@
 "use client";
 
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+
 
 type Project = {
   id: string;
@@ -19,6 +21,12 @@ export default function ProfilePage() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
+
+  useEffect(() => {
+  const isAuthed = localStorage.getItem("aidex_auth") === "true";
+  if (!isAuthed) router.replace("/auth");
+}, [router]);
+
 
   /* =========================
      LOAD PROJECTS
