@@ -25,7 +25,8 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     <Sidebar />
 
     {/* Main area */}
-    <div className="flex flex-col flex-1 min-w-0">
+    <div className="mx-auto w-full max-w-5xl px-6 py-6">
+
       <Topbar />
 
       {/* ✅ Page container like before (not too wide, not too padded) */}

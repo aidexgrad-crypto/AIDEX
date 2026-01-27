@@ -613,3 +613,279 @@ body {
 .aidex-input-modal:focus {
   border: 1px solid rgba(99, 102, 241, 0.55);
 }
+/* =========================
+   AUTH PAGE LAYOUT
+========================= */
+
+.auth-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* LEFT IMAGE */
+.auth-image {
+  width: 50%;
+  height: 100%;
+  background-image: url("/AAIDEX.png");
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.auth-image-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* RIGHT LOGIN */
+.auth-login {
+  width: 50%;
+  height: 100%;
+  background: #0b1220;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* LOGIN CARD */
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 32px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+}
+
+/* TEXT */
+.auth-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: white;
+}
+
+.auth-subtitle {
+  margin-top: 6px;
+  margin-bottom: 24px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+}
+
+/* INPUTS */
+.auth-input {
+  width: 100%;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: white;
+  outline: none;
+}
+
+.auth-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* BUTTON */
+.auth-button {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  background: white;
+  color: black;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.auth-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(255, 255, 255, 0.15);
+}
+
+/* FOOTER */
+.auth-footer {
+  margin-top: 16px;
+  font-size: 12px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* MOBILE */
+@media (max-width: 768px) {
+  .auth-image {
+    display: none;
+  }
+
+  .auth-login {
+    width: 100%;
+  }
+}
+
+/* =========================
+   AUTH TOGGLE
+========================= */
+
+.auth-toggle {
+  display: flex;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 4px;
+  margin-bottom: 20px;
+}
+
+.auth-toggle button {
+  flex: 1;
+  padding: 8px 0;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.auth-toggle button.active {
+  background: white;
+  color: black;
+}
+
+/* =========================
+   AIDEX – GLOBAL UI TOKENS
+========================= */
+
+:root {
+  --bg-main: #0b1020;
+  --card-bg: rgba(255, 255, 255, 0.05);
+  --card-border: rgba(255, 255, 255, 0.12);
+  --text-muted: rgba(255, 255, 255, 0.6);
+  --text-faint: rgba(255, 255, 255, 0.4);
+}
+
+/* =========================
+   GLOBAL PAGE FIXES
+========================= */
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  background: var(--bg-main);
+  color: white;
+}
+
+/* =========================
+   REUSABLE CARD STYLE
+========================= */
+
+.aidex-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+}
+
+/* =========================
+   BUTTONS
+========================= */
+
+.aidex-btn {
+  padding: 0.6rem 1.1rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.aidex-btn-primary {
+  background: white;
+  color: black;
+}
+
+.aidex-btn-primary:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.aidex-btn-outline {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--card-border);
+  color: white;
+}
+
+.aidex-btn-outline:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.aidex-btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fecaca;
+}
+
+.aidex-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+/* =========================
+   INPUTS
+========================= */
+
+.aidex-input {
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--card-border);
+  color: white;
+  outline: none;
+}
+
+.aidex-input::placeholder {
+  color: var(--text-faint);
+}
+
+.aidex-input:focus {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* =========================
+   PROJECT ROW
+========================= */
+
+.project-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+}
+
+/* =========================
+   EMPTY STATE
+========================= */
+
+.empty-state {
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed var(--card-border);
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}

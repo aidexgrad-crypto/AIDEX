@@ -1,10 +1,11 @@
 "use client";
 
-
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-
+/* =========================
+   TYPES
+========================= */
 type Project = {
   id: string;
   name: string;
@@ -12,210 +13,175 @@ type Project = {
   datasetType: "CSV" | "Images" | "Unknown";
 };
 
+type ProjectMap = {
+  [email: string]: Project[];
+};
+
 const STORAGE_KEY = "aidex_projects";
 
+/* =========================
+   PAGE
+========================= */
 export default function ProfilePage() {
   const router = useRouter();
 
   const [projects, setProjects] = useState<Project[]>([]);
+  const [userEmail, setUserEmail] = useState("");
+  const [userName, setUserName] = useState("");
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
 
+  /* =========================
+     AUTH + USER
+  ========================= */
   useEffect(() => {
-  const isAuthed = localStorage.getItem("aidex_auth") === "true";
-  if (!isAuthed) router.replace("/auth");
-}, [router]);
+    const authed = localStorage.getItem("aidex_auth") === "true";
+    const email = localStorage.getItem("aidex_user_email");
 
+    if (!authed || !email) {
+      router.replace("/auth");
+      return;
+    }
+
+    setUserEmail(email);
+
+    const users = JSON.parse(localStorage.getItem("aidex_users") || "[]");
+    const user = users.find((u: any) => u.email === email);
+    setUserName(user?.name || "User");
+  }, [router]);
 
   /* =========================
      LOAD PROJECTS
   ========================= */
   useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      setProjects([]);
-      return;
-    }
+    if (!userEmail) return;
 
-    try {
-      const parsed = JSON.parse(raw);
-      setProjects(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setProjects([]);
-    }
-  }, []);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const data: ProjectMap = raw ? JSON.parse(raw) : {};
+    setProjects(data[userEmail] || []);
+  }, [userEmail]);
 
   /* =========================
      SAVE PROJECTS
   ========================= */
   const saveProjects = (next: Project[]) => {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const data: ProjectMap = raw ? JSON.parse(raw) : {};
+
+    data[userEmail] = next;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     setProjects(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   };
 
   /* =========================
-     DELETE
+     CRUD
   ========================= */
-  const handleDelete = (id: string) => {
-    const filtered = projects.filter((p) => p.id !== id);
-    saveProjects(filtered);
-  };
+  const handleDelete = (id: string) =>
+    saveProjects(projects.filter((p) => p.id !== id));
 
-  /* =========================
-     START EDIT
-  ========================= */
   const startEdit = (p: Project) => {
     setEditingId(p.id);
     setEditingValue(p.name);
   };
 
-  /* =========================
-     CANCEL EDIT
-  ========================= */
   const cancelEdit = () => {
     setEditingId(null);
     setEditingValue("");
   };
 
-  /* =========================
-     UPDATE
-  ========================= */
   const handleUpdate = () => {
     if (!editingId) return;
 
     const trimmed = editingValue.trim();
     if (!trimmed) return;
 
-    const updated = projects.map((p) =>
-      p.id === editingId ? { ...p, name: trimmed } : p
+    saveProjects(
+      projects.map((p) =>
+        p.id === editingId ? { ...p, name: trimmed } : p
+      )
     );
 
-    saveProjects(updated);
     cancelEdit();
   };
 
   const totalProjects = useMemo(() => projects.length, [projects]);
 
+  /* =========================
+     RENDER
+  ========================= */
   return (
     <main className="min-h-screen bg-[#0B1020] text-white">
-      <div className="max-w-6xl mx-auto px-6 py-10 space-y-6">
-        {/* Header */}
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">User Profile</h1>
-              <p className="text-white/60 mt-2 text-sm">
-                View and manage your past projects.
-              </p>
-            </div>
+      <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
 
-            {/* ✅ Redirect Create button to app/page.tsx */}
-            <button
-              onClick={() => router.push("/")}
-              className="rounded-xl bg-white text-black px-5 py-3 text-sm font-semibold hover:bg-white/90 transition"
-            >
-              + Create Project
-            </button>
+        {/* HEADER */}
+        <section className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">User Profile</h1>
+            <p className="text-white/60 text-sm">
+              {userName} • {userEmail}
+            </p>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-xs text-white/50">Total Projects</p>
-              <p className="text-xl font-bold mt-1">{totalProjects}</p>
-            </div>
+          <button
+            onClick={() => router.push("/")}
+            className="rounded-xl bg-white text-black px-5 py-3 text-sm font-semibold hover:bg-white/90"
+          >
+            + Create Project
+          </button>
+        </section>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-xs text-white/50">Storage</p>
-              <p className="text-sm font-semibold mt-1">localStorage</p>
-            </div>
+        {/* STATS */}
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <StatCard title="Total Projects" value={totalProjects} />
+          <StatCard title="Storage" value="localStorage" />
+          <StatCard title="Actions" value="Edit / Delete" />
+        </section>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-xs text-white/50">Actions</p>
-              <p className="text-sm font-semibold mt-1">Edit / Delete</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Past Projects */}
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-8">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <h2 className="text-xl font-semibold">Past Projects</h2>
-              <p className="text-white/60 text-sm mt-1">
-                Manage your projects using CRUD operations.
-              </p>
-            </div>
-          </div>
+        {/* PROJECTS */}
+        <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
+          <h2 className="text-xl font-semibold mb-4">Past Projects</h2>
 
           {projects.length === 0 ? (
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6 text-white/70 text-sm">
-              No projects yet. Click{" "}
-              <span className="font-semibold text-white">+ Create Project</span>{" "}
-              to start ✅
-            </div>
+            <EmptyState />
           ) : (
-            <div className="mt-6 space-y-3">
+            <div className="space-y-3">
               {projects.map((p) => {
-                const isEditing = editingId === p.id;
+                const editing = editingId === p.id;
 
                 return (
                   <div
                     key={p.id}
-                    className="rounded-2xl border border-white/10 bg-white/5 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-white/10 bg-white/5 p-4"
                   >
-                    {/* Left side */}
                     <div className="flex-1">
-                      {!isEditing ? (
+                      {!editing ? (
                         <>
-                          <p className="font-semibold text-white">{p.name}</p>
-                          <p className="text-xs text-white/50 mt-1">
-                            Created: {new Date(p.createdAt).toLocaleString()} •
-                            Type: {p.datasetType}
+                          <p className="font-semibold">{p.name}</p>
+                          <p className="text-xs text-white/50">
+                            {new Date(p.createdAt).toLocaleString()} • {p.datasetType}
                           </p>
                         </>
                       ) : (
                         <input
                           value={editingValue}
                           onChange={(e) => setEditingValue(e.target.value)}
-                          className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-2 text-sm text-white outline-none"
+                          className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-2"
+                          autoFocus
                         />
                       )}
                     </div>
 
-                    {/* Right side buttons */}
-                    <div className="flex items-center gap-2">
-                      {!isEditing ? (
+                    <div className="flex gap-2">
+                      {!editing ? (
                         <>
-                          <button
-                            onClick={() => startEdit(p)}
-                            className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10 transition"
-                          >
-                            Edit
-                          </button>
-
-                          <button
-                            onClick={() => handleDelete(p.id)}
-                            className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm text-red-200 hover:bg-red-500/20 transition"
-                          >
-                            Delete
-                          </button>
+                          <ActionButton onClick={() => startEdit(p)}>Edit</ActionButton>
+                          <DangerButton onClick={() => handleDelete(p.id)}>Delete</DangerButton>
                         </>
                       ) : (
                         <>
-                          <button
-                            onClick={handleUpdate}
-                            className="rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold hover:bg-white/90 transition"
-                          >
-                            Save
-                          </button>
-
-                          <button
-                            onClick={cancelEdit}
-                            className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10 transition"
-                          >
-                            Cancel
-                          </button>
+                          <PrimaryButton onClick={handleUpdate}>Save</PrimaryButton>
+                          <ActionButton onClick={cancelEdit}>Cancel</ActionButton>
                         </>
                       )}
                     </div>
@@ -224,8 +190,62 @@ export default function ProfilePage() {
               })}
             </div>
           )}
-        </div>
+        </section>
       </div>
     </main>
+  );
+}
+
+/* =========================
+   UI COMPONENTS
+========================= */
+
+function StatCard({ title, value }: { title: string; value: any }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+      <p className="text-xs text-white/50">{title}</p>
+      <p className="text-2xl font-bold mt-1">{value}</p>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/70">
+      No projects yet. Click <b>+ Create Project</b> to start ✅
+    </div>
+  );
+}
+
+function ActionButton({ children, onClick }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+    >
+      {children}
+    </button>
+  );
+}
+
+function PrimaryButton({ children, onClick }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold hover:bg-white/90"
+    >
+      {children}
+    </button>
+  );
+}
+
+function DangerButton({ children, onClick }: any) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm text-red-200 hover:bg-red-500/20"
+    >
+      {children}
+    </button>
   );
 }

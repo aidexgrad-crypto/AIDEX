@@ -358,7 +358,8 @@ export default function OverviewPage() {
 
  return (
   <main className="w-full">
-    <div className="max-w-6xl w-full space-y-8 pb-32">
+    <div className="w-full space-y-8 pb-32">
+
       {/* =========================
           HEADER
       ========================= */}
