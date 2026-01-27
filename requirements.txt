@@ -1,1 +1,13 @@
-streamlit\nfastapi\nscikit-learn\npandas\nmatplotlib\nshap\noptuna
+streamlit
+fastapi
+scikit-learn
+pandas
+matplotlib
+shap
+optuna
+pymongo
+python-multipart
+uvicorn
+requests
+python-dotenv
+email-validator
