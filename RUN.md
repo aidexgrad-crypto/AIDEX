@@ -9,17 +9,17 @@ BACKEND_URL=http://localhost:8000
 
 2) Install deps:
 ```
-pip install -r requirements.txt
+python -m pip install -r requirements.txt 
 ```
 
 3) Start backend (from project root):
 ```
-uvicorn main:app --reload --app-dir Back-End
+python -m uvicorn main:app --reload
 ```
 
 4) Start frontend (new shell, project root):
 ```
-streamlit run Front-End/app.py
+python -m streamlit run Front-End/app.py
 ```
 
 Open the Streamlit URL (default http://localhost:8501), sign up/sign in, and upload a file. It saves directly to Mongo (GridFS).***
