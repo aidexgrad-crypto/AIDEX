@@ -1,2 +1,0 @@
-x = "galan"
-print(x)

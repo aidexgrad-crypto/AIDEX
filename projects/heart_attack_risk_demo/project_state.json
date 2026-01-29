@@ -1,0 +1,298 @@
+{
+  "project_id": "heart_attack_risk_demo",
+  "task_type": "classification",
+  "test_size": 0.2,
+  "random_state": 42,
+  "best_model_name": "Naive Bayes",
+  "cv_results": [
+    {
+      "accuracy_mean": 0.9154145077720207,
+      "accuracy_std": 0.00329229663915515,
+      "precision_mean": 0.9120385141349999,
+      "precision_std": 0.004063650524317394,
+      "recall_mean": 0.9154145077720207,
+      "recall_std": 0.00329229663915515,
+      "f1_mean": 0.9110653574328559,
+      "f1_std": 0.004667633340340056,
+      "train_accuracy_mean": 0.9487694300518136,
+      "overfitting": 0.033354922279792865,
+      "training_time": 16.958635568618774,
+      "model_name": "Gradient Boosting"
+    },
+    {
+      "accuracy_mean": 0.9088082901554404,
+      "accuracy_std": 0.0012558756107296234,
+      "precision_mean": 0.9061731794798229,
+      "precision_std": 0.0019204250909369699,
+      "recall_mean": 0.9088082901554404,
+      "recall_std": 0.0012558756107296234,
+      "f1_mean": 0.9064544040194222,
+      "f1_std": 0.0019084361258809971,
+      "train_accuracy_mean": 0.9994170984455959,
+      "overfitting": 0.0906088082901555,
+      "training_time": 1.1073875427246094,
+      "model_name": "XGBoost"
+    },
+    {
+      "accuracy_mean": 0.908160621761658,
+      "accuracy_std": 0.003261574692231662,
+      "precision_mean": 0.9051297843561468,
+      "precision_std": 0.004292970851263545,
+      "recall_mean": 0.908160621761658,
+      "recall_std": 0.003261574692231662,
+      "f1_mean": 0.9056036177143583,
+      "f1_std": 0.004301728217967416,
+      "train_accuracy_mean": 0.9979922279792746,
+      "overfitting": 0.08983160621761654,
+      "training_time": 1.246581792831421,
+      "model_name": "LightGBM"
+    },
+    {
+      "accuracy_mean": 0.9130829015544041,
+      "accuracy_std": 0.005236109567722191,
+      "precision_mean": 0.9085632989089077,
+      "precision_std": 0.006974136622209937,
+      "recall_mean": 0.9130829015544041,
+      "recall_std": 0.005236109567722191,
+      "f1_mean": 0.9046353520140737,
+      "f1_std": 0.009418725600920497,
+      "train_accuracy_mean": 0.915738341968912,
+      "overfitting": 0.002655440414507937,
+      "training_time": 0.1306595802307129,
+      "model_name": "Naive Bayes"
+    },
+    {
+      "accuracy_mean": 0.905699481865285,
+      "accuracy_std": 0.003135678351531152,
+      "precision_mean": 0.8996582046643523,
+      "precision_std": 0.004210372314007751,
+      "recall_mean": 0.905699481865285,
+      "recall_std": 0.003135678351531152,
+      "f1_mean": 0.8996839765093396,
+      "f1_std": 0.004126817589753574,
+      "train_accuracy_mean": 0.9994818652849741,
+      "overfitting": 0.09378238341968903,
+      "training_time": 3.4375193119049072,
+      "model_name": "Random Forest"
+    },
+    {
+      "accuracy_mean": 0.8905440414507773,
+      "accuracy_std": 0.0030925741933453847,
+      "precision_mean": 0.8909543878883902,
+      "precision_std": 0.004219006282974068,
+      "recall_mean": 0.8905440414507773,
+      "recall_std": 0.0030925741933453847,
+      "f1_mean": 0.8906520731958727,
+      "f1_std": 0.0036424360533533393,
+      "train_accuracy_mean": 0.9994818652849741,
+      "overfitting": 0.10893782383419681,
+      "training_time": 0.16012978553771973,
+      "model_name": "Decision Tree"
+    },
+    {
+      "accuracy_mean": 0.9062176165803109,
+      "accuracy_std": 0.005299811540279497,
+      "precision_mean": 0.8850977441328899,
+      "precision_std": 0.020959576432414598,
+      "recall_mean": 0.9062176165803109,
+      "recall_std": 0.005299811540279497,
+      "f1_mean": 0.8847038900555404,
+      "f1_std": 0.015760709762493764,
+      "train_accuracy_mean": 0.9075777202072539,
+      "overfitting": 0.0013601036269430544,
+      "training_time": 6.256423473358154,
+      "model_name": "AdaBoost"
+    },
+    {
+      "accuracy_mean": 0.8629533678756477,
+      "accuracy_std": 0.0027962478166998683,
+      "precision_mean": 0.8372710359461465,
+      "precision_std": 0.0038980998110425967,
+      "recall_mean": 0.8629533678756477,
+      "recall_std": 0.0027962478166998683,
+      "f1_mean": 0.8459696985931446,
+      "f1_std": 0.002508744904501108,
+      "train_accuracy_mean": 0.9994818652849741,
+      "overfitting": 0.13652849740932638,
+      "training_time": 2.9291510581970215,
+      "model_name": "Extra Trees"
+    },
+    {
+      "accuracy_mean": 0.8529792746113989,
+      "accuracy_std": 0.006515428155419318,
+      "precision_mean": 0.8255661188434656,
+      "precision_std": 0.01309705182895313,
+      "recall_mean": 0.8529792746113989,
+      "recall_std": 0.006515428155419318,
+      "f1_mean": 0.8246897811710744,
+      "f1_std": 0.008370457605226728,
+      "train_accuracy_mean": 0.8820919689119171,
+      "overfitting": 0.029112694300518216,
+      "training_time": 39.7730176448822,
+      "model_name": "Support Vector Machine"
+    },
+    {
+      "accuracy_mean": 0.7878238341968913,
+      "accuracy_std": 0.006484451300924287,
+      "precision_mean": 0.7348089074452389,
+      "precision_std": 0.013140738076747151,
+      "recall_mean": 0.7878238341968913,
+      "recall_std": 0.006484451300924287,
+      "f1_mean": 0.7416212572883151,
+      "f1_std": 0.008421266969275209,
+      "train_accuracy_mean": 0.8304080310880828,
+      "overfitting": 0.04258419689119153,
+      "training_time": 0.3605630397796631,
+      "model_name": "K-Nearest Neighbors"
+    },
+    {
+      "accuracy_mean": 0.7717616580310881,
+      "accuracy_std": 0.001395120416356094,
+      "precision_mean": 0.7350009972835577,
+      "precision_std": 0.01806279862162202,
+      "recall_mean": 0.7717616580310881,
+      "recall_std": 0.001395120416356094,
+      "f1_mean": 0.6907545032045643,
+      "f1_std": 0.0025461285571764802,
+      "train_accuracy_mean": 0.7729274611398964,
+      "overfitting": 0.0011658031088083165,
+      "training_time": 0.41468143463134766,
+      "model_name": "Logistic Regression"
+    }
+  ],
+  "test_results": [
+    {
+      "model_name": "Gradient Boosting",
+      "accuracy": 0.9129984464008286,
+      "precision": 0.9093671245254239,
+      "recall": 0.9129984464008286,
+      "f1": 0.9090306306750259,
+      "roc_auc": null
+    },
+    {
+      "model_name": "LightGBM",
+      "accuracy": 0.9093733816675298,
+      "precision": 0.9076851531670584,
+      "recall": 0.9093733816675298,
+      "f1": 0.90828168874205,
+      "roc_auc": null
+    },
+    {
+      "model_name": "XGBoost",
+      "accuracy": 0.9083376488865873,
+      "precision": 0.9064539098912481,
+      "recall": 0.9083376488865873,
+      "f1": 0.907095586489055,
+      "roc_auc": null
+    },
+    {
+      "model_name": "Naive Bayes",
+      "accuracy": 0.9041947177628172,
+      "precision": 0.89788065701352,
+      "recall": 0.9041947177628172,
+      "f1": 0.8973850494809518,
+      "roc_auc": null
+    },
+    {
+      "model_name": "Decision Tree",
+      "accuracy": 0.8948731227343345,
+      "precision": 0.8972778686465229,
+      "recall": 0.8948731227343345,
+      "f1": 0.8958083971476833,
+      "roc_auc": null
+    },
+    {
+      "model_name": "Random Forest",
+      "accuracy": 0.8979803210771621,
+      "precision": 0.8915513463887352,
+      "recall": 0.8979803210771621,
+      "f1": 0.8928682163031084,
+      "roc_auc": null
+    },
+    {
+      "model_name": "AdaBoost",
+      "accuracy": 0.9062661833247022,
+      "precision": 0.8482498841614652,
+      "recall": 0.9062661833247022,
+      "f1": 0.87043036784676,
+      "roc_auc": null
+    },
+    {
+      "model_name": "Extra Trees",
+      "accuracy": 0.8632832729155878,
+      "precision": 0.8382072592759472,
+      "recall": 0.8632832729155878,
+      "f1": 0.8475382382362088,
+      "roc_auc": null
+    },
+    {
+      "model_name": "Support Vector Machine",
+      "accuracy": 0.8503366131538063,
+      "precision": 0.81802808036837,
+      "recall": 0.8503366131538063,
+      "f1": 0.8228710835354296,
+      "roc_auc": null
+    },
+    {
+      "model_name": "K-Nearest Neighbors",
+      "accuracy": 0.7907819782496116,
+      "precision": 0.7393061031183562,
+      "recall": 0.7907819782496116,
+      "f1": 0.7467364083764421,
+      "roc_auc": null
+    },
+    {
+      "model_name": "Logistic Regression",
+      "accuracy": 0.7726566545831176,
+      "precision": 0.7527398186587009,
+      "recall": 0.7726566545831176,
+      "f1": 0.6916293668797848,
+      "roc_auc": null
+    }
+  ],
+  "feature_info": {
+    "feature_types": {
+      "numerical": [
+        "Age",
+        "Cholesterol",
+        "Heart rate",
+        "Exercise Hours Per Week",
+        "Diet",
+        "Stress Level",
+        "Sedentary Hours Per Day",
+        "Income",
+        "BMI",
+        "Triglycerides",
+        "Physical Activity Days Per Week",
+        "Sleep Hours Per Day",
+        "Blood sugar",
+        "Systolic blood pressure",
+        "Diastolic blood pressure"
+      ],
+      "categorical": [
+        "Gender"
+      ],
+      "binary": [
+        "Diabetes",
+        "Family History",
+        "Smoking",
+        "Obesity",
+        "Alcohol Consumption",
+        "Previous Heart Problems",
+        "Medication Use"
+      ],
+      "datetime": []
+    },
+    "scaling_method": "standard",
+    "num_encoders": 8,
+    "selected_features": null,
+    "num_final_features": null
+  },
+  "dataset": {
+    "n_samples_total": 9651,
+    "n_features": 25,
+    "n_train": 7720,
+    "n_test": 1931
+  },
+  "saved_at_utc": "2026-01-27T20:02:12.789886Z"
+}
