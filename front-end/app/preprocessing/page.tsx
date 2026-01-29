@@ -53,7 +53,7 @@ async function loadImageFromFile(file: File): Promise<HTMLImageElement> {
 async function resizeAndNormalizeImage(
   file: File,
   size: number = 224,
-  quality: number = 0.92
+  quality: number = 0.85  // Reduced from 0.92 for faster processing
 ): Promise<File | null> {
   if (!file.type.startsWith("image/")) return null;
 
@@ -91,6 +91,10 @@ async function resizeAndNormalizeImage(
   const sx = Math.floor((srcW - cropW) / 2);
   const sy = Math.floor((srcH - cropH) / 2);
 
+  // Use faster image smoothing for preprocessing
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'medium';  // 'medium' is faster than 'high'
+  
   ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, size, size);
 
   const blob: Blob | null = await new Promise((resolve) =>
@@ -189,6 +193,12 @@ export default function PreprocessingPage() {
   const [isPredicting, setIsPredicting] = useState(false);
   const [predictionResults, setPredictionResults] = useState<any>(null);
   const [predictionError, setPredictionError] = useState<string | null>(null);
+
+  // Image prediction states
+  const [predictImages, setPredictImages] = useState<File[]>([]);
+  const [isPredictingImages, setIsPredictingImages] = useState(false);
+  const [imagePredictionResults, setImagePredictionResults] = useState<any>(null);
+  const [imagePredictionError, setImagePredictionError] = useState<string | null>(null);
 
   /* =========================
      AUTH GUARD
@@ -541,33 +551,65 @@ export default function PreprocessingPage() {
 
     const cleaned: any[] = [];
 
-    for (const item of state.images) {
-      try {
-        if (!item.file || !item.file.type?.startsWith("image/")) {
+    // Process images in parallel batches for speed
+    const batchSize = 10; // Process 10 images at a time
+    const totalBatches = Math.ceil(state.images.length / batchSize);
+    
+    console.log(`🖼️ Processing ${state.images.length} images in ${totalBatches} batches...`);
+
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      const start = batchIndex * batchSize;
+      const end = Math.min(start + batchSize, state.images.length);
+      const batch = state.images.slice(start, end);
+
+      // Process batch in parallel
+      const batchPromises = batch.map(async (item) => {
+        try {
+          if (!item.file || !item.file.type?.startsWith("image/")) {
+            return { status: 'skipped' };
+          }
+
+          const newFile = await resizeAndNormalizeImage(item.file, targetSize, 0.85);
+          if (!newFile) {
+            return { status: 'corrupted' };
+          }
+
+          return {
+            status: 'success',
+            data: {
+              ...item,
+              file: newFile,
+              label: item.label ?? "unknown",
+              relativePath: item.relativePath ?? newFile.name,
+            }
+          };
+        } catch {
+          return { status: 'corrupted' };
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+
+      // Collect results
+      batchResults.forEach((result) => {
+        if (result.status === 'success') {
+          resizedCount++;
+          cleaned.push(result.data);
+        } else if (result.status === 'skipped') {
           skippedNonImages++;
-          continue;
-        }
-
-        const newFile = await resizeAndNormalizeImage(item.file, targetSize, 0.92);
-        if (!newFile) {
+        } else if (result.status === 'corrupted') {
           removedCorrupted++;
-          continue;
         }
+      });
 
-        resizedCount++;
-
-        cleaned.push({
-          ...item,
-          file: newFile,
-          label: item.label ?? "unknown",
-          relativePath: item.relativePath ?? newFile.name,
-        });
-      } catch {
-        removedCorrupted++;
-      }
+      // Log progress
+      const progress = Math.round(((batchIndex + 1) / totalBatches) * 100);
+      console.log(`⏳ Progress: ${progress}% (${end}/${state.images.length} images)`);
     }
 
     const afterCount = cleaned.length;
+
+    console.log(`✅ Image preprocessing complete: ${afterCount} images ready`);
 
     // ✅ store preview (8 images)
     setImagePreview(cleaned.slice(0, 8));
@@ -625,6 +667,11 @@ export default function PreprocessingPage() {
         const result = await response.json();
 
         if (result.status === "success") {
+          // Log performance optimization info
+          if (result.total_rows && result.preview_rows) {
+            console.log(`✅ Cleaning optimized: Showing ${result.preview_rows} of ${result.total_rows} rows (full data saved to ${result.cleaned_file_path})`);
+          }
+          
           // Update structured data with cleaned data
           setStructured({
             fileName: structured.fileName,
@@ -786,6 +833,83 @@ export default function PreprocessingPage() {
       setPredictionError("Failed to communicate with backend");
     } finally {
       setIsPredicting(false);
+    }
+  };
+
+  /* =========================
+     PREDICT ON NEW IMAGES
+  ========================= */
+  const handlePredictImagesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      const imageFiles = Array.from(files).filter(f => f.type.startsWith("image/"));
+      setPredictImages(imageFiles);
+      setImagePredictionError(null);
+    }
+  };
+
+  const handlePredictImages = async () => {
+    if (predictImages.length === 0) {
+      setImagePredictionError("Please select images first");
+      return;
+    }
+
+    if (!trainingResults || !(trainingResults.project_id || trainingResults.project_name)) {
+      setImagePredictionError("No trained model found. Please train a model first.");
+      return;
+    }
+
+    setIsPredictingImages(true);
+    setImagePredictionError(null);
+    setImagePredictionResults(null);
+
+    try {
+      // Upload images first
+      const formData = new FormData();
+      predictImages.forEach((img) => {
+        formData.append("files", img);
+      });
+
+      const uploadResponse = await fetch("/api/automl/upload-images", {
+        method: "POST",
+        body: formData,
+      });
+
+      const uploadData = await uploadResponse.json();
+
+      if (uploadData.status !== "success") {
+        const errorMsg = uploadData.error || "Failed to upload images";
+        throw new Error(errorMsg);
+      }
+
+      // Predict using uploaded paths - use project_name for images, project_id for tabular
+      const projectIdentifier = trainingResults.project_name || trainingResults.project_id;
+      
+      const response = await fetch("/api/automl/predict-images", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          image_paths: uploadData.paths,
+          project_name: projectIdentifier
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        setImagePredictionError(data.error);
+      } else if (data.status === "success") {
+        setImagePredictionResults(data);
+      } else {
+        setImagePredictionError("Prediction failed with unknown error");
+      }
+    } catch (error) {
+      console.error("Image prediction error:", error);
+      setImagePredictionError(`Failed to predict: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsPredictingImages(false);
     }
   };
 
@@ -1663,6 +1787,347 @@ export default function PreprocessingPage() {
                 </p>
               </div>
             )}
+
+            {/* IMAGE AUTOML TRAINING SECTION */}
+            <div style={{ marginTop: 24, paddingTop: 24, borderTop: "1px solid var(--border)" }}>
+              <p style={{ fontWeight: 800, fontSize: 16 }}>Next Step: Train Image Classification Models</p>
+              <p className="text-sm" style={{ color: "var(--muted)", marginTop: 6 }}>
+                Your images are cleaned and ready. Start AutoML to automatically train CNN models (ResNet, MobileNet) and select the best one.
+              </p>
+
+              <div style={{ marginTop: 16 }}>
+                <button
+                  className="aidex-btn-primary"
+                  onClick={async () => {
+                    setIsTraining(true);
+                    setTrainingError(null);
+                    setTrainingResults(null);
+
+                    try {
+                      // First, upload all image files to the backend
+                      const formData = new FormData();
+                      state.images.forEach((img) => {
+                        formData.append("files", img.file);
+                      });
+
+                      const uploadResponse = await fetch("/api/automl/upload-images", {
+                        method: "POST",
+                        body: formData,
+                      });
+
+                      const uploadData = await uploadResponse.json();
+
+                      if (uploadData.status !== "success") {
+                        const errorMsg = uploadData.error || "Failed to upload images";
+                        throw new Error(errorMsg);
+                      }
+
+                      // Prepare image data with server paths and labels
+                      const imageData = state.images.map((img, idx) => ({
+                        path: uploadData.paths[idx],
+                        label: img.label,
+                        file_path: uploadData.paths[idx]
+                      }));
+
+                      // Now train the models
+                      const response = await fetch("/api/automl/train-images", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                          image_data: imageData,
+                          epochs: 10,
+                          batch_size: 32,
+                          learning_rate: 0.001,
+                          test_size: 0.2,
+                          model_names: ["mobilenet_v2"],
+                          project_name: `image_${Date.now()}`
+                        }),
+                      });
+
+                      const data = await response.json();
+
+                      if (data.error) {
+                        setTrainingError(data.error);
+                      } else if (data.status === "success") {
+                        setTrainingResults(data);
+                      } else {
+                        setTrainingError("Training failed with unknown error");
+                      }
+                    } catch (error) {
+                      console.error("Image training error:", error);
+                      // Check if it's a timeout error (training might still be running)
+                      const errorMsg = error instanceof Error ? error.message : String(error);
+                      if (errorMsg.includes("fetch failed") || errorMsg.includes("timeout")) {
+                        setTrainingError(`Training is taking longer than expected. The model is still training in the background. Please check the backend terminal for progress, or try refreshing the page in a few minutes to see if training completed.`);
+                      } else {
+                        setTrainingError(`Failed to train models: ${errorMsg}`);
+                      }
+                    } finally {
+                      setIsTraining(false);
+                    }
+                  }}
+                  disabled={isTraining}
+                  style={{
+                    opacity: isTraining ? 0.6 : 1,
+                    cursor: isTraining ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {isTraining ? "Training Image Models..." : "Start Image AutoML Training"}
+                </button>
+              </div>
+
+              {trainingError && (
+                <div
+                  style={{
+                    marginTop: 12,
+                    padding: 12,
+                    borderRadius: 10,
+                    border: "1px solid #ef4444",
+                    background: "rgba(239, 68, 68, 0.1)",
+                  }}
+                >
+                  <p style={{ fontSize: 12, fontWeight: 600, color: "#ef4444" }}>
+                    ❌ Training Error
+                  </p>
+                  <p className="text-xs" style={{ color: "#dc2626", marginTop: 4 }}>
+                    {trainingError}
+                  </p>
+                </div>
+              )}
+
+              {trainingResults && trainingResults.status === "success" && (
+                <div
+                  style={{
+                    marginTop: 16,
+                    padding: 16,
+                    borderRadius: 14,
+                    border: "1px solid #10b981",
+                    background: "rgba(16, 185, 129, 0.1)",
+                  }}
+                >
+                  <p style={{ fontSize: 16, fontWeight: 800, color: "#10b981" }}>
+                    ✓ Image Models Trained Successfully!
+                  </p>
+                  <p className="text-sm" style={{ color: "var(--muted)", marginTop: 8 }}>
+                    Best Model: {trainingResults.best_model}
+                  </p>
+
+                  <div style={{ marginTop: 16 }}>
+                    <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+                      Class Distribution:
+                    </p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {trainingResults.class_names?.map((className: string) => (
+                        <div
+                          key={className}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: 8,
+                            border: "1px solid var(--border)",
+                            background: "rgba(59, 130, 246, 0.1)",
+                          }}
+                        >
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>
+                            {className}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {trainingResults.test_results && trainingResults.test_results.length > 0 && (
+                    <div style={{ marginTop: 16 }}>
+                      <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+                        Model Performance:
+                      </p>
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead>
+                            <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                              <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700 }}>Model</th>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>Accuracy</th>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>F1 Score</th>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>Precision</th>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>Recall</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {trainingResults.test_results.map((model: any, idx: number) => (
+                              <tr
+                                key={model.model_name}
+                                style={{
+                                  borderBottom: idx < trainingResults.test_results.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                                  background: model.model_name === trainingResults.best_model ? "rgba(16, 185, 129, 0.08)" : "transparent"
+                                }}
+                              >
+                                <td style={{ padding: "10px 12px", fontWeight: model.model_name === trainingResults.best_model ? 700 : 400 }}>
+                                  {model.model_name === trainingResults.best_model ? "★ " : ""}{model.model_name}
+                                </td>
+                                <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                  {(model.accuracy * 100).toFixed(2)}%
+                                </td>
+                                <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                  {(model.f1 * 100).toFixed(2)}%
+                                </td>
+                                <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                  {(model.precision * 100).toFixed(2)}%
+                                </td>
+                                <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                  {(model.recall * 100).toFixed(2)}%
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-xs" style={{ color: "var(--muted)", marginTop: 12 }}>
+                    Training: {trainingResults.train_size} images | Test: {trainingResults.test_size} images | Classes: {trainingResults.num_classes}
+                  </p>
+                </div>
+              )}
+
+              {/* PREDICT ON NEW IMAGES SECTION */}
+              {trainingResults && trainingResults.status === "success" && (
+                <div
+                  style={{
+                    marginTop: 16,
+                    padding: 16,
+                    borderRadius: 14,
+                    border: "1px solid #3b82f6",
+                    background: "rgba(59, 130, 246, 0.05)",
+                  }}
+                >
+                  <p style={{ fontSize: 16, fontWeight: 800, marginBottom: 8, color: "#3b82f6" }}>
+                    🔮 Predict on New Images
+                  </p>
+
+                  <p className="text-sm" style={{ color: "var(--muted)", marginBottom: 12 }}>
+                    Upload images (without labels) to get predictions using the trained {trainingResults.best_model} model.
+                  </p>
+
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handlePredictImagesUpload}
+                      disabled={isPredictingImages}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        border: "1px solid var(--border)",
+                        background: "rgba(15, 23, 42, 0.5)",
+                        fontSize: 13,
+                        cursor: isPredictingImages ? "not-allowed" : "pointer",
+                        opacity: isPredictingImages ? 0.6 : 1,
+                      }}
+                    />
+
+                    <button
+                      onClick={handlePredictImages}
+                      disabled={predictImages.length === 0 || isPredictingImages}
+                      className="aidex-btn-primary"
+                      style={{
+                        opacity: (predictImages.length === 0 || isPredictingImages) ? 0.6 : 1,
+                        cursor: (predictImages.length === 0 || isPredictingImages) ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {isPredictingImages ? "Predicting..." : "Get Predictions"}
+                    </button>
+
+                    {predictImages.length > 0 && (
+                      <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                        Selected: {predictImages.length} image(s)
+                      </span>
+                    )}
+                  </div>
+
+                  {imagePredictionError && (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: 12,
+                        borderRadius: 10,
+                        border: "1px solid #ef4444",
+                        background: "rgba(239, 68, 68, 0.1)",
+                      }}
+                    >
+                      <p style={{ fontSize: 13, fontWeight: 600, color: "#ef4444" }}>
+                        Error
+                      </p>
+                      <p className="text-sm" style={{ color: "#dc2626", marginTop: 4 }}>
+                        {imagePredictionError}
+                      </p>
+                    </div>
+                  )}
+
+                  {imagePredictionResults && (
+                    <div
+                      style={{
+                        marginTop: 16,
+                        padding: 14,
+                        borderRadius: 12,
+                        border: "1px solid #10b981",
+                        background: "rgba(16, 185, 129, 0.08)",
+                      }}
+                    >
+                      <p style={{ fontSize: 15, fontWeight: 700, color: "#10b981", marginBottom: 12 }}>
+                        ✓ Predictions Complete!
+                      </p>
+
+                      <p className="text-sm" style={{ color: "var(--muted)", marginBottom: 8 }}>
+                        Model: {imagePredictionResults.model_used} | Classes: {imagePredictionResults.class_names?.join(", ")}
+                      </p>
+
+                      <div style={{ 
+                        maxHeight: 400, 
+                        overflowY: "auto",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        marginTop: 12
+                      }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead style={{ position: "sticky", top: 0, background: "var(--background)", zIndex: 1 }}>
+                            <tr style={{ borderBottom: "2px solid var(--border)" }}>
+                              <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700 }}>Image #</th>
+                              <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700 }}>Predicted Class</th>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>Confidence</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {imagePredictionResults.results?.map((pred: any, idx: number) => (
+                              <tr
+                                key={idx}
+                                style={{
+                                  borderBottom: idx < imagePredictionResults.results.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                                }}
+                              >
+                                <td style={{ padding: "10px 12px" }}>Image {idx + 1}</td>
+                                <td style={{ padding: "10px 12px", fontWeight: 600, color: "#3b82f6" }}>
+                                  {pred.predicted_label || pred.predicted_class || "Unknown"}
+                                </td>
+                                <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                  {(pred.confidence * 100).toFixed(2)}%
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <p className="text-xs" style={{ color: "var(--muted)", marginTop: 8 }}>
+                        Total predictions: {imagePredictionResults.results?.length || 0}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

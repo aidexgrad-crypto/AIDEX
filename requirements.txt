@@ -1,1 +1,6 @@
 streamlit\nfastapi\nscikit-learn\npandas\nmatplotlib\nshap\noptuna
+
+# Image Processing Dependencies
+torch
+torchvision
+Pillow

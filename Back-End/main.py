@@ -1,5 +1,6 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import pandas as pd
 import numpy as np
@@ -7,6 +8,8 @@ import os
 import shutil
 import sys
 import joblib
+import torch
+from typing import List
 
 # Add AutoML to path
 automl_path = os.path.join(os.path.dirname(__file__), '..', 'AutoML')
@@ -14,6 +17,7 @@ sys.path.insert(0, automl_path)
 
 from Data_Pre_Processing.Data_quality_engine import DataQualityEngine
 from aidex_pipeline import run_aidex
+from image_pipeline import run_image_pipeline, ImagePipeline
 
 app = FastAPI()
 
@@ -30,14 +34,17 @@ app.add_middleware(
 UPLOAD_DIR = "temp_uploads"
 CLEANED_DIR = "cleaned_datasets"
 MODEL_DIR = "saved_models"
+IMAGE_UPLOAD_DIR = "temp_uploads/images"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(CLEANED_DIR, exist_ok=True)
 os.makedirs(MODEL_DIR, exist_ok=True)
+os.makedirs(IMAGE_UPLOAD_DIR, exist_ok=True)
 
 LAST_FILE_PATH = None
 CLEANED_FILE_PATH = None
 LAST_TRAINED_PIPELINE = None
 LAST_PROJECT_NAME = None
+LAST_IMAGE_PIPELINE = None
 
 # ===================== ANALYZE =====================
 @app.post("/data-quality/analyze")
@@ -143,12 +150,16 @@ async def clean_data(request: CleanDataRequest):
             df = df.drop(columns=cols_to_drop)
             summary["notes"].append(f"Removed {len(cols_to_drop)} constant columns")
         
-        # 2. Remove duplicates
-        dup_count = df.duplicated().sum()
-        if dup_count > 0:
-            df = df.drop_duplicates()
-            summary["removed_duplicates"] = int(dup_count)
-            summary["notes"].append(f"Removed {dup_count} duplicate rows")
+        # 2. Remove duplicates (optimized - only check if dataset is reasonable size)
+        dup_count = 0
+        if len(df) < 100000:  # Only check for duplicates on datasets < 100k rows
+            dup_count = df.duplicated().sum()
+            if dup_count > 0:
+                df = df.drop_duplicates()
+                summary["removed_duplicates"] = int(dup_count)
+                summary["notes"].append(f"Removed {dup_count} duplicate rows")
+        else:
+            summary["notes"].append("Skipped duplicate check (large dataset - use manual check if needed)")
         
         # 3. Drop columns with >40% missing
         missing_threshold = 0.4
@@ -227,12 +238,16 @@ async def clean_data(request: CleanDataRequest):
         
         print(f"\n[INFO] Cleaned data saved to: {CLEANED_FILE_PATH}")
         
-        # Return cleaned data and summary
+        # Return cleaned data and summary (optimized for large datasets)
+        # Only return first 1000 rows for preview, full data is saved in CSV
+        preview_size = min(1000, len(df))
         return {
             "status": "success",
-            "cleaned_data": df.to_dict('records'),
+            "cleaned_data": df.head(preview_size).to_dict('records'),
             "summary": summary,
-            "cleaned_file_path": CLEANED_FILE_PATH
+            "cleaned_file_path": CLEANED_FILE_PATH,
+            "total_rows": len(df),
+            "preview_rows": preview_size
         }
         
     except Exception as e:
@@ -676,5 +691,286 @@ async def predict_new_data(file: UploadFile = File(...), project_name: str = For
             "error_type": type(e).__name__,
             "traceback": error_trace
         }
+
+
+# ===================== IMAGE TRAINING =====================
+class ImageTrainingRequest(BaseModel):
+    image_data: List[dict]  # List of {path: str, label: str}
+    epochs: int = 10
+    batch_size: int = 32
+    learning_rate: float = 0.001
+    test_size: float = 0.2
+    model_names: List[str] = None
+    project_name: str = "image_project"
+
+
+@app.post("/automl/train-images")
+async def train_images(request: ImageTrainingRequest):
+    """Train image classification models"""
+    global LAST_IMAGE_PIPELINE, LAST_PROJECT_NAME
+    
+    try:
+        print(f"\n{'='*80}")
+        print(f"STARTING IMAGE TRAINING")
+        print(f"{'='*80}")
+        print(f"Number of images: {len(request.image_data)}")
+        print(f"Epochs: {request.epochs}")
+        print(f"Batch size: {request.batch_size}")
+        print(f"Models: {request.model_names}")
+        
+        # Extract paths and labels
+        image_paths = []
+        labels = []
+        
+        for item in request.image_data:
+            # Handle both 'path' and 'file_path' keys
+            path = item.get('path') or item.get('file_path')
+            if path:
+                image_paths.append(path)
+                labels.append(item.get('label', 'unknown'))
+        
+        if len(image_paths) == 0:
+            return {"error": "No valid image paths provided"}
+        
+        print(f"\nProcessing {len(image_paths)} images")
+        print(f"Unique labels: {sorted(list(set(labels)))}")
+        
+        # Use default models if not specified
+        if request.model_names is None or len(request.model_names) == 0:
+            request.model_names = ['resnet18', 'mobilenet_v2']
+        
+        # Run image pipeline
+        pipeline = run_image_pipeline(
+            image_paths=image_paths,
+            labels=labels,
+            image_size=224,
+            batch_size=request.batch_size,
+            test_size=request.test_size,
+            epochs=request.epochs,
+            model_names=request.model_names,
+            learning_rate=request.learning_rate,
+            pretrained=True,
+            project_id=request.project_name
+        )
+        
+        # Save pipeline
+        import time
+        project_timestamp = int(time.time() * 1000)
+        project_name = f"image_{project_timestamp}"
+        model_path = os.path.join(MODEL_DIR, f"{project_name}_pipeline.pth")
+        
+        # Save with torch
+        torch.save({
+            'pipeline': pipeline,
+            'class_names': pipeline.data_info['class_names'],
+            'idx_to_label': pipeline.data_info['idx_to_label'],
+            'label_to_idx': pipeline.data_info['label_to_idx'],
+            'best_model_name': pipeline.best_model_name,
+            'num_classes': pipeline.data_info['num_classes'],
+            'image_size': pipeline.image_size,
+            'project_name': project_name
+        }, model_path)
+        
+        # Store globally
+        LAST_IMAGE_PIPELINE = pipeline
+        LAST_PROJECT_NAME = project_name
+        
+        print(f"✓ Model saved to: {model_path}")
+        
+        # Prepare response
+        summary = pipeline.get_summary()
+        
+        # Format training results
+        training_results = []
+        for model_name, history in pipeline.training_results.items():
+            training_results.append({
+                'model_name': model_name,
+                'best_val_acc': float(history['best_val_acc']),
+                'final_train_acc': float(history['train_acc'][-1]) if history['train_acc'] else 0.0,
+                'final_val_acc': float(history['val_acc'][-1]) if history['val_acc'] else 0.0,
+                'training_time': float(history['training_time'])
+            })
+        
+        # Format test results
+        test_results = []
+        for model_name, metrics in pipeline.test_results.items():
+            test_results.append({
+                'model_name': model_name,
+                'accuracy': float(metrics['accuracy']),
+                'precision': float(metrics['precision']),
+                'recall': float(metrics['recall']),
+                'f1': float(metrics['f1']),
+                'per_class_metrics': metrics['per_class_metrics']
+            })
+        
+        print(f"\n{'='*80}")
+        print(f"TRAINING COMPLETED")
+        print(f"Best Model: {pipeline.best_model_name}")
+        print(f"{'='*80}\n")
+        
+        return {
+            'status': 'success',
+            'project_name': project_name,
+            'best_model': pipeline.best_model_name,
+            'num_classes': pipeline.data_info['num_classes'],
+            'class_names': pipeline.data_info['class_names'],
+            'train_size': pipeline.data_info['train_size'],
+            'test_size': pipeline.data_info['test_size'],
+            'training_results': training_results,
+            'test_results': test_results,
+            'model_path': model_path
+        }
+        
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"\n{'='*80}")
+        print(f"ERROR IN IMAGE TRAINING")
+        print(f"{'='*80}")
+        print(error_trace)
+        print(f"{'='*80}\n")
+        
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": error_trace
+        }
+
+
+# ===================== IMAGE PREDICTION =====================
+class ImagePredictionRequest(BaseModel):
+    image_paths: List[str]
+    project_name: str = None
+
+
+@app.post("/automl/predict-images")
+async def predict_images(request: ImagePredictionRequest):
+    """Make predictions on images"""
+    global LAST_IMAGE_PIPELINE, LAST_PROJECT_NAME
+    
+    try:
+        print(f"\n{'='*80}")
+        print(f"STARTING IMAGE PREDICTION")
+        print(f"{'='*80}")
+        
+        # Determine which pipeline to use
+        project_name = request.project_name or LAST_PROJECT_NAME
+        
+        if project_name and project_name != LAST_PROJECT_NAME:
+            # Load pipeline from file
+            model_path = os.path.join(MODEL_DIR, f"{project_name}_pipeline.pth")
+            if not os.path.exists(model_path):
+                return {"error": f"Model not found: {project_name}"}
+            
+            print(f"Loading pipeline from: {model_path}")
+            checkpoint = torch.load(model_path, map_location='cpu')
+            pipeline = checkpoint['pipeline']
+        elif LAST_IMAGE_PIPELINE:
+            # Use last trained pipeline
+            pipeline = LAST_IMAGE_PIPELINE
+            project_name = LAST_PROJECT_NAME
+        else:
+            return {"error": "No trained model available. Please train a model first."}
+        
+        print(f"Using project: {project_name}")
+        print(f"Number of images to predict: {len(request.image_paths)}")
+        
+        # Make predictions
+        results = pipeline.predict(request.image_paths)
+        
+        print(f"✓ Predictions complete")
+        print(f"{'='*80}\n")
+        
+        return {
+            'status': 'success',
+            'project_name': project_name,
+            'results': results['predictions'],
+            'model_used': results['model_used'],
+            'num_classes': results['num_classes'],
+            'class_names': results['class_names']
+        }
+        
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"\n{'='*80}")
+        print(f"ERROR IN IMAGE PREDICTION")
+        print(f"{'='*80}")
+        print(error_trace)
+        print(f"{'='*80}\n")
+        
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": error_trace
+        }
+
+
+# ===================== IMAGE UPLOAD =====================
+@app.post("/automl/upload-images")
+async def upload_images(request: Request):
+    """Upload multiple images and return their paths"""
+    try:
+        print(f"\n{'='*60}")
+        print(f"IMAGE UPLOAD REQUEST RECEIVED")
+        print(f"Content-Type: {request.headers.get('content-type')}")
+        print(f"{'='*60}\n")
+        
+        # Ensure the image upload directory exists
+        os.makedirs(IMAGE_UPLOAD_DIR, exist_ok=True)
+        print(f"Upload directory: {os.path.abspath(IMAGE_UPLOAD_DIR)}")
+        
+        # Get form data
+        form = await request.form()
+        files = form.getlist('files')
+        
+        if not files:
+            print("No files found in form data")
+            print(f"Form keys: {list(form.keys())}")
+            return {
+                'status': 'error',
+                'error': 'No files provided'
+            }
+        
+        print(f"Number of files: {len(files)}")
+        
+        uploaded_paths = []
+        
+        for idx, file in enumerate(files):
+            print(f"Processing file {idx + 1}/{len(files)}: {file.filename}")
+            # Create unique filename
+            import time
+            timestamp = int(time.time() * 1000)
+            filename = f"{timestamp}_{file.filename}"
+            file_path = os.path.join(IMAGE_UPLOAD_DIR, filename)
+            
+            # Save file
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            
+            # Get absolute path
+            abs_path = os.path.abspath(file_path)
+            uploaded_paths.append(abs_path)
+            print(f"  ✓ Saved to: {abs_path}")
+        
+        print(f"\n✓ Successfully uploaded {len(uploaded_paths)} images\n")
+        
+        return {
+            'status': 'success',
+            'uploaded_count': len(uploaded_paths),
+            'paths': uploaded_paths
+        }
+        
+    except Exception as e:
+        print(f"\n❌ ERROR during image upload: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'status': 'error',
+            'error': str(e)
+        }
+
 
 

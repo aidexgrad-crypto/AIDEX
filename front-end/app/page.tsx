@@ -117,10 +117,32 @@ export default function Home() {
       if (!file.type.startsWith("image/")) return;
 
       const relativePath = (file as any).webkitRelativePath || file.name;
+      
+      // Extract label from filename (e.g., "dog.101.jpg" -> "dog")
+      const fileName = file.name;
+      let label = "unknown";
+      
+      // Try to extract label from filename pattern like "dog.123.jpg" or "cat.5.jpg"
+      const match = fileName.match(/^([a-zA-Z_]+)\.\d+\./);
+      if (match) {
+        label = match[1];
+      } else {
+        // If no pattern match, check if filename starts with a word followed by underscore or dot
+        const simpleMatch = fileName.match(/^([a-zA-Z_]+)[._]/);
+        if (simpleMatch) {
+          label = simpleMatch[1];
+        } else {
+          // Try to get label from parent folder name in relative path
+          const pathParts = relativePath.split('/');
+          if (pathParts.length > 1) {
+            label = pathParts[pathParts.length - 2];
+          }
+        }
+      }
 
       items.push({
         file,
-        label: "unknown",
+        label,
         relativePath,
       });
     });
