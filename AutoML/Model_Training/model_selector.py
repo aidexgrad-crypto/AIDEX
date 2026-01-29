@@ -53,7 +53,7 @@ class ModelSelector:
             'naive bayes': 0.2,
             'decision tree': 0.3,
             'k-nearest neighbors': 0.4,
-            'support vector machine': 0.5,
+            # 'support vector machine': 0.5,  # Removed - too slow for large datasets
             'random forest': 0.6,
             'extra trees': 0.6,
             'adaboost': 0.7,
@@ -522,7 +522,7 @@ if __name__ == "__main__":
     
     # Create sample results
     sample_results = pd.DataFrame({
-        'model_name': ['Random Forest', 'XGBoost', 'Logistic Regression', 'Decision Tree', 'SVM'],
+        'model_name': ['Random Forest', 'XGBoost', 'Logistic Regression', 'Decision Tree', 'Naive Bayes'],
         'f1_mean': [0.89, 0.91, 0.85, 0.82, 0.88],
         'f1_std': [0.02, 0.04, 0.01, 0.05, 0.03],
         'accuracy_mean': [0.88, 0.90, 0.84, 0.80, 0.87],

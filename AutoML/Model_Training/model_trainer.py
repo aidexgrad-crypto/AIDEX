@@ -85,7 +85,7 @@ class ModelTrainer:
                 'AdaBoost': AdaBoostClassifier(random_state=self.random_state, n_estimators=100),
                 'K-Nearest Neighbors': KNeighborsClassifier(n_neighbors=5),
                 'Naive Bayes': GaussianNB(),
-                'Support Vector Machine': SVC(random_state=self.random_state, probability=True)
+                # 'Support Vector Machine': SVC(random_state=self.random_state, probability=True)  # Temporarily disabled - too slow for large datasets
             }
         else:  # regression
             models = {

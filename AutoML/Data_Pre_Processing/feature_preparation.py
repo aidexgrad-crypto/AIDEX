@@ -32,6 +32,7 @@ class FeaturePreparator:
         self.scaling_method = scaling_method
         self.encoders = {}
         self.scaler = None
+        self.scaler_features = None  # Store feature names used during fit
         self.feature_selector = None
         self.selected_features = None
         self.feature_stats = {}
@@ -176,26 +177,56 @@ class FeaturePreparator:
             Dataframe with encoded features
         """
         df_encoded = df.copy()
-        feature_types = self.feature_stats.get('types', self.identify_feature_types(df))
+        
+        # During inference, use stored feature types; during training, identify them
+        if fit:
+            feature_types = self.feature_stats.get('types', self.identify_feature_types(df))
+        else:
+            # For inference, we must use the stored feature types from training
+            # But also check current data for any object/string columns
+            feature_types = self.feature_stats.get('types', {})
+            # Safety check: if a column is object/string type, treat it as categorical
+            for col in df_encoded.columns:
+                if df_encoded[col].dtype == 'object' or df_encoded[col].dtype.name == 'string':
+                    # This column needs encoding
+                    if col not in feature_types.get('binary', []) and col not in feature_types.get('categorical', []):
+                        # Check if it's in encoders (from training)
+                        if col in self.encoders:
+                            # Add to appropriate category based on encoder type
+                            if self.encoders[col].get('type') == 'label':
+                                if 'binary' not in feature_types:
+                                    feature_types['binary'] = []
+                                feature_types['binary'].append(col)
+                            elif self.encoders[col].get('type') == 'onehot':
+                                if 'categorical' not in feature_types:
+                                    feature_types['categorical'] = []
+                                feature_types['categorical'].append(col)
         
         # Handle binary features with Label Encoding
-        for col in feature_types['binary']:
+        for col in feature_types.get('binary', []):
             if col in df_encoded.columns:
                 if fit:
                     le = LabelEncoder()
                     df_encoded[col] = le.fit_transform(df_encoded[col].astype(str))
-                    self.encoders[col] = le
+                    self.encoders[col] = {'type': 'label', 'encoder': le}
                 else:
                     if col in self.encoders:
+                        # Handle both old format (LabelEncoder) and new format (dict)
+                        if isinstance(self.encoders[col], dict):
+                            le = self.encoders[col]['encoder']
+                        else:
+                            le = self.encoders[col]
                         # Handle unseen categories
-                        le = self.encoders[col]
                         df_encoded[col] = df_encoded[col].astype(str).map(
                             lambda x: le.transform([x])[0] if x in le.classes_ else -1
                         )
+                    else:
+                        print(f"⚠️  Warning: No encoder found for binary column '{col}', encoding as 0/1")
+                        df_encoded[col] = pd.Categorical(df_encoded[col]).codes
         
         # Handle categorical features with One-Hot Encoding (for low cardinality)
         # or Label Encoding (for high cardinality)
-        for col in feature_types['categorical']:
+        for col in feature_types.get('categorical', []):
             if col in df_encoded.columns:
                 cardinality = df_encoded[col].nunique()
                 
@@ -206,25 +237,41 @@ class FeaturePreparator:
                         self.encoders[col] = {'type': 'onehot', 'columns': dummies.columns.tolist()}
                         df_encoded = pd.concat([df_encoded.drop(col, axis=1), dummies], axis=1)
                     else:
-                        if col in self.encoders and self.encoders[col]['type'] == 'onehot':
-                            dummies = pd.get_dummies(df_encoded[col], prefix=col, drop_first=True)
-                            # Align with training columns
-                            for dummy_col in self.encoders[col]['columns']:
-                                if dummy_col not in dummies.columns:
-                                    dummies[dummy_col] = 0
-                            dummies = dummies[self.encoders[col]['columns']]
-                            df_encoded = pd.concat([df_encoded.drop(col, axis=1), dummies], axis=1)
+                        if col in self.encoders:
+                            # Handle both old format (LabelEncoder) and new format (dict)
+                            if isinstance(self.encoders[col], dict) and self.encoders[col].get('type') == 'onehot':
+                                dummies = pd.get_dummies(df_encoded[col], prefix=col, drop_first=True)
+                                # Align with training columns
+                                for dummy_col in self.encoders[col]['columns']:
+                                    if dummy_col not in dummies.columns:
+                                        dummies[dummy_col] = 0
+                                dummies = dummies[self.encoders[col]['columns']]
+                                df_encoded = pd.concat([df_encoded.drop(col, axis=1), dummies], axis=1)
+                        else:
+                            print(f"⚠️  Warning: No encoder found for categorical column '{col}', using label encoding")
+                            df_encoded[col] = pd.Categorical(df_encoded[col]).codes
                 else:  # Label Encoding for high cardinality
                     if fit:
                         le = LabelEncoder()
                         df_encoded[col] = le.fit_transform(df_encoded[col].astype(str))
                         self.encoders[col] = {'type': 'label', 'encoder': le}
                     else:
-                        if col in self.encoders and self.encoders[col]['type'] == 'label':
-                            le = self.encoders[col]['encoder']
-                            df_encoded[col] = df_encoded[col].astype(str).map(
-                                lambda x: le.transform([x])[0] if x in le.classes_ else -1
-                            )
+                        if col in self.encoders:
+                            # Handle both old format (LabelEncoder) and new format (dict)
+                            if isinstance(self.encoders[col], dict) and self.encoders[col].get('type') == 'label':
+                                le = self.encoders[col]['encoder']
+                                df_encoded[col] = df_encoded[col].astype(str).map(
+                                    lambda x: le.transform([x])[0] if x in le.classes_ else -1
+                                )
+                            else:
+                                print(f"⚠️  Warning: No encoder found for high-cardinality column '{col}', using label encoding")
+                                df_encoded[col] = pd.Categorical(df_encoded[col]).codes
+        
+        # Final safety check: encode any remaining object/string columns that were missed
+        for col in df_encoded.columns:
+            if df_encoded[col].dtype == 'object' or df_encoded[col].dtype.name == 'string':
+                print(f"⚠️  Warning: Column '{col}' still has object/string type after encoding, converting to categorical codes")
+                df_encoded[col] = pd.Categorical(df_encoded[col]).codes
         
         return df_encoded
     
@@ -327,9 +374,25 @@ class FeaturePreparator:
                 return df_scaled
             
             df_scaled[numerical_cols] = self.scaler.fit_transform(df_scaled[numerical_cols])
+            # Store the feature names that were used during fit
+            self.scaler_features = numerical_cols
         else:
-            if self.scaler is not None:
-                df_scaled[numerical_cols] = self.scaler.transform(df_scaled[numerical_cols])
+            if self.scaler is not None and self.scaler_features is not None:
+                # Only transform columns that were present during training AND exist in current data
+                cols_to_scale = [col for col in self.scaler_features if col in df_scaled.columns]
+                
+                if cols_to_scale:
+                    # Make sure we have the exact same columns in the same order
+                    missing_cols = [col for col in self.scaler_features if col not in df_scaled.columns]
+                    
+                    if missing_cols:
+                        print(f"Warning: Missing columns from training: {missing_cols}")
+                        # Add missing columns with 0 values
+                        for col in missing_cols:
+                            df_scaled[col] = 0
+                    
+                    # Reorder columns to match training order
+                    df_scaled[self.scaler_features] = self.scaler.transform(df_scaled[self.scaler_features])
         
         return df_scaled
     
@@ -427,6 +490,29 @@ class FeaturePreparator:
             df = df[self.selected_features]
         
         return df, y
+    
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Transform new data using fitted preprocessing steps
+        This method is used for prediction on new data
+        
+        Args:
+            df: New dataframe to transform
+            
+        Returns:
+            Transformed dataframe ready for prediction
+        """
+        # Use prepare_features with fit=False to apply saved transformations
+        X, _ = self.prepare_features(
+            df,
+            target_col=None,
+            fit=False,
+            create_interactions=False,
+            select_features=bool(self.selected_features),
+            k_features='all',
+            handle_missing=self.missing_value_strategy or 'auto'
+        )
+        return X
     
     def get_feature_info(self) -> Dict:
         """
