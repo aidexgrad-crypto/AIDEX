@@ -100,6 +100,7 @@ class ImagePipeline:
     
     def train_models(self, model_names: List[str] = None,
                     epochs: int = 10, learning_rate: float = 0.001,
+                    early_stopping_patience: int = 3,
                     pretrained: bool = True) -> Dict:
         """
         Train multiple models
@@ -108,6 +109,7 @@ class ImagePipeline:
             model_names: List of model architectures to train
             epochs: Number of training epochs
             learning_rate: Learning rate
+            early_stopping_patience: Number of epochs without improvement before stopping
             pretrained: Use pretrained weights
             
         Returns:
@@ -132,6 +134,7 @@ class ImagePipeline:
         print(f"Models: {', '.join(model_names)}")
         print(f"Epochs: {epochs}")
         print(f"Learning rate: {learning_rate}")
+        print(f"Early stopping patience: {early_stopping_patience}")
         print(f"Pretrained: {pretrained}")
         print(f"{'='*60}\n")
         
@@ -145,7 +148,8 @@ class ImagePipeline:
                     train_loader=self.data_info['train_loader'],
                     val_loader=self.data_info['test_loader'],
                     epochs=epochs,
-                    learning_rate=learning_rate
+                    learning_rate=learning_rate,
+                    early_stopping_patience=early_stopping_patience
                 )
                 self.training_results[model_name] = history
                 
@@ -310,6 +314,7 @@ def run_image_pipeline(image_paths: List[str], labels: List[str],
                       test_size: float = 0.2, epochs: int = 10,
                       model_names: List[str] = None,
                       learning_rate: float = 0.001,
+                      early_stopping_patience: int = 3,
                       pretrained: bool = True,
                       project_id: Optional[str] = None) -> ImagePipeline:
     """
@@ -324,6 +329,7 @@ def run_image_pipeline(image_paths: List[str], labels: List[str],
         epochs: Training epochs
         model_names: List of models to train
         learning_rate: Learning rate
+        early_stopping_patience: Number of epochs without improvement before stopping
         pretrained: Use pretrained weights
         project_id: Project identifier
         
@@ -350,6 +356,7 @@ def run_image_pipeline(image_paths: List[str], labels: List[str],
         model_names=model_names,
         epochs=epochs,
         learning_rate=learning_rate,
+        early_stopping_patience=early_stopping_patience,
         pretrained=pretrained
     )
     

@@ -1,0 +1,11 @@
+area,bedrooms,bathrooms,stories,mainroad,guestroom,basement,hotwaterheating,airconditioning,parking,prefarea,furnishingstatus,price_prediction
+3360,2,1,1,yes,no,no,no,no,1,no,unfurnished,2944229.6859662505
+3420,5,1,2,no,no,no,no,no,0,no,unfurnished,2984218.5493607298
+1700,3,1,2,yes,no,no,no,no,0,no,unfurnished,2741556.5477506802
+3649,2,1,1,yes,no,no,no,no,0,no,unfurnished,2732119.6522801407
+2990,2,1,1,no,no,no,no,no,1,no,unfurnished,2456658.7959855376
+3000,2,1,1,yes,no,yes,no,no,2,no,unfurnished,3571580.9231066257
+2400,3,1,1,no,no,no,no,no,0,no,semi-furnished,2425042.680383075
+3620,2,1,1,yes,no,no,no,no,0,no,unfurnished,2724783.736091195
+2910,3,1,1,no,no,no,no,no,0,no,furnished,2603815.445910621
+3850,3,1,2,yes,no,no,no,no,0,no,unfurnished,3285426.1962414887

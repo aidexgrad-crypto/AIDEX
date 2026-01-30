@@ -60,6 +60,11 @@ class AIDEXPipeline:
         self.test_results = None
         self.best_model_name = None
         
+        # Target scaler for regression (to handle large-scale targets)
+        self.target_scaler = None
+        self.y_train_original = None
+        self.y_test_original = None
+        
     def load_data(self, filepath_or_dataframe, target_column):
         """
         Load dataset from file or DataFrame
@@ -141,6 +146,33 @@ class AIDEXPipeline:
         print(f"  Training set: {self.X_train.shape[0]} samples")
         print(f"  Test set: {self.X_test.shape[0]} samples")
         
+        # For regression: scale target variable to improve model performance
+        if self.task_type == 'regression':
+            from sklearn.preprocessing import StandardScaler
+            print(f"\n[REGRESSION] Scaling target variable...")
+            print(f"  Original target range: [{self.y_train.min():.2f}, {self.y_train.max():.2f}]")
+            print(f"  Original target mean: {self.y_train.mean():.2f}")
+            print(f"  Original target std: {self.y_train.std():.2f}")
+            
+            # Store original values for later reference
+            self.y_train_original = self.y_train.copy()
+            self.y_test_original = self.y_test.copy()
+            
+            # Scale target variable
+            self.target_scaler = StandardScaler()
+            self.y_train = pd.Series(
+                self.target_scaler.fit_transform(self.y_train.values.reshape(-1, 1)).ravel(),
+                index=self.y_train.index
+            )
+            self.y_test = pd.Series(
+                self.target_scaler.transform(self.y_test.values.reshape(-1, 1)).ravel(),
+                index=self.y_test.index
+            )
+            
+            print(f"  Scaled target range: [{self.y_train.min():.2f}, {self.y_train.max():.2f}]")
+            print(f"  Scaled target mean: {self.y_train.mean():.2f}")
+            print(f"  ✓ Target scaling complete")
+        
         return self.X_train, self.X_test, self.y_train, self.y_test
     
     def train_models(self, cv_folds=5, verbose=True):
@@ -182,7 +214,43 @@ class AIDEXPipeline:
         print("STEP 3: TESTING ON HOLDOUT SET")
         print("="*80)
         
-        self.test_results = self.trainer.test_all_models(self.X_test, self.y_test)
+        # For regression with scaled targets, test on original scale
+        if self.task_type == 'regression' and self.target_scaler is not None:
+            print("[REGRESSION] Testing on original scale...")
+            # Get predictions on scaled targets
+            scaled_results = self.trainer.test_all_models(self.X_test, self.y_test)
+            
+            # Re-evaluate on original scale
+            from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+            import numpy as np
+            
+            test_results_list = []
+            for model_name in self.trainer.trained_models.keys():
+                model = self.trainer.trained_models[model_name]
+                # Predict on scaled scale
+                y_pred_scaled = model.predict(self.X_test.values if hasattr(self.X_test, 'values') else self.X_test)
+                # Inverse transform to original scale
+                y_pred_original = self.target_scaler.inverse_transform(y_pred_scaled.reshape(-1, 1)).ravel()
+                
+                # Calculate metrics on original scale
+                r2 = r2_score(self.y_test_original, y_pred_original)
+                mse = mean_squared_error(self.y_test_original, y_pred_original)
+                rmse = np.sqrt(mse)
+                mae = mean_absolute_error(self.y_test_original, y_pred_original)
+                
+                test_results_list.append({
+                    'model_name': model_name,
+                    'r2': r2,
+                    'mse': mse,
+                    'rmse': rmse,
+                    'mae': mae
+                })
+            
+            self.test_results = pd.DataFrame(test_results_list)
+            self.test_results = self.test_results.sort_values('r2', ascending=False)
+            print("✓ Metrics calculated on original scale")
+        else:
+            self.test_results = self.trainer.test_all_models(self.X_test, self.y_test)
         
         if verbose:
             print("\nTest Results (Top 5):")
@@ -448,7 +516,7 @@ class AIDEXPipeline:
             new_data: DataFrame with same structure as training data (without target)
             
         Returns:
-            Array of predictions
+            Array of predictions (in original scale for regression)
         """
         if self.preparator is None or self.trainer is None:
             raise ValueError("Pipeline must be run before making predictions.")
@@ -458,6 +526,11 @@ class AIDEXPipeline:
         
         # Make predictions
         predictions = self.trainer.predict(X_prepared, model_name=self.best_model_name)
+        
+        # For regression: inverse transform to original scale
+        if self.task_type == 'regression' and self.target_scaler is not None:
+            predictions = self.target_scaler.inverse_transform(predictions.reshape(-1, 1)).ravel()
+            print(f"[REGRESSION] Predictions transformed to original scale")
         
         return predictions
     

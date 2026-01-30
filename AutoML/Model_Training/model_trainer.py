@@ -74,34 +74,24 @@ class ModelTrainer:
             Dictionary of model name to model instance
         """
         if self.task_type == 'classification':
+            # Top 6 classification models (fast & accurate)
             models = {
-                'Logistic Regression': LogisticRegression(random_state=self.random_state, max_iter=1000),
-                'Decision Tree': DecisionTreeClassifier(random_state=self.random_state),
                 'Random Forest': RandomForestClassifier(random_state=self.random_state, n_estimators=100),
-                'Gradient Boosting': GradientBoostingClassifier(random_state=self.random_state, n_estimators=100),
                 'XGBoost': XGBClassifier(random_state=self.random_state, n_estimators=100, eval_metric='logloss'),
                 'LightGBM': LGBMClassifier(random_state=self.random_state, n_estimators=100, verbose=-1),
+                'Gradient Boosting': GradientBoostingClassifier(random_state=self.random_state, n_estimators=100),
+                'Logistic Regression': LogisticRegression(random_state=self.random_state, max_iter=1000),
                 'Extra Trees': ExtraTreesClassifier(random_state=self.random_state, n_estimators=100),
-                'AdaBoost': AdaBoostClassifier(random_state=self.random_state, n_estimators=100),
-                'K-Nearest Neighbors': KNeighborsClassifier(n_neighbors=5),
-                'Naive Bayes': GaussianNB(),
-                # 'Support Vector Machine': SVC(random_state=self.random_state, probability=True)  # Temporarily disabled - too slow for large datasets
             }
         else:  # regression
+            # Top 6 regression models (fast & accurate)
             models = {
-                'Linear Regression': LinearRegression(),
-                'Ridge Regression': Ridge(random_state=self.random_state),
-                'Lasso Regression': Lasso(random_state=self.random_state),
-                'ElasticNet': ElasticNet(random_state=self.random_state),
-                'Decision Tree': DecisionTreeRegressor(random_state=self.random_state),
                 'Random Forest': RandomForestRegressor(random_state=self.random_state, n_estimators=100),
-                'Gradient Boosting': GradientBoostingRegressor(random_state=self.random_state, n_estimators=100),
                 'XGBoost': XGBRegressor(random_state=self.random_state, n_estimators=100),
                 'LightGBM': LGBMRegressor(random_state=self.random_state, n_estimators=100, verbose=-1),
+                'Gradient Boosting': GradientBoostingRegressor(random_state=self.random_state, n_estimators=100),
+                'Ridge Regression': Ridge(random_state=self.random_state),
                 'Extra Trees': ExtraTreesRegressor(random_state=self.random_state, n_estimators=100),
-                'AdaBoost': AdaBoostRegressor(random_state=self.random_state, n_estimators=100),
-                'K-Nearest Neighbors': KNeighborsRegressor(n_neighbors=5),
-                'Support Vector Machine': SVR()
             }
         
         return models
@@ -120,7 +110,16 @@ class ModelTrainer:
         Returns:
             Dictionary of evaluation metrics
         """
-        cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=self.random_state)
+        # Check if stratification is possible (need at least 2 samples per class)
+        unique, counts = np.unique(y, return_counts=True)
+        min_samples_per_class = counts.min()
+        
+        if min_samples_per_class >= cv_folds:
+            # Use stratified K-fold if we have enough samples per class
+            cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=self.random_state)
+        else:
+            # Fall back to regular K-fold if classes are too small
+            cv = KFold(n_splits=cv_folds, shuffle=True, random_state=self.random_state)
         
         scoring = {
             'accuracy': 'accuracy',
@@ -537,6 +536,16 @@ if __name__ == "__main__":
         task_type='classification',
         cv_folds=5
     )
+    
+    print("\nCross-Validation Results:")
+    print(cv_results[['model_name', 'accuracy_mean', 'f1_mean', 'training_time']].head())
+    
+    print("\nTest Results:")
+    print(test_results[['model_name', 'accuracy', 'f1', 'roc_auc']].head())
+    
+    # Make predictions with best model
+    predictions = trainer.predict(X_test_df)
+    print(f"\nSample predictions: {predictions[:10]}")
     
     print("\nCross-Validation Results:")
     print(cv_results[['model_name', 'accuracy_mean', 'f1_mean', 'training_time']].head())

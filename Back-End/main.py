@@ -18,6 +18,7 @@ sys.path.insert(0, automl_path)
 from Data_Pre_Processing.Data_quality_engine import DataQualityEngine
 from aidex_pipeline import run_aidex
 from image_pipeline import run_image_pipeline, ImagePipeline
+from Visualization.report_generator import generate_report
 
 app = FastAPI()
 
@@ -326,12 +327,15 @@ async def train_automl(request: AutoMLRequest):
             print(f"Consider removing these columns before training.\n")
         
         # Run AIDEX pipeline
+        # Use robust scaling for regression (better for outliers)
+        scaling_method_to_use = 'robust' if request.task_type == 'regression' else request.scaling_method
+        
         pipeline = run_aidex(
             data_path=df,
             target_column=request.target_column,
             task_type=request.task_type,
             test_size=request.test_size,
-            scaling_method=request.scaling_method,
+            scaling_method=scaling_method_to_use,
             selection_priority=request.selection_priority,
             project_id=request.project_name
         )
@@ -344,9 +348,33 @@ async def train_automl(request: AutoMLRequest):
         print(f"\n{'='*80}")
         print(f"TRAINING COMPLETED")
         print(f"Best Model: {best_model}")
-        print(f"CV F1 Score: {cv_results['f1_mean']:.4f}")
-        print(f"Test F1 Score: {test_results['f1']:.4f}")
-        print(f"Test Accuracy: {test_results['accuracy']:.4f}")
+        print(f"\nData Statistics:")
+        print(f"Training samples: {len(pipeline.X_train)}, Test samples: {len(pipeline.X_test)}")
+        print(f"Number of features: {pipeline.X_train.shape[1]}")
+        print(f"\nTarget Variable Statistics:")
+        print(f"Training target range: [{pipeline.y_train.min()}, {pipeline.y_train.max()}]")
+        print(f"Training target mean: {pipeline.y_train.mean():.2f}")
+        print(f"Test target range: [{pipeline.y_test.min()}, {pipeline.y_test.max()}]")
+        print(f"Test target mean: {pipeline.y_test.mean():.2f}")
+        
+        if request.task_type == 'classification':
+            print(f"CV F1 Score: {cv_results['f1_mean']:.4f}")
+            print(f"Test F1 Score: {test_results['f1']:.4f}")
+            print(f"Test Accuracy: {test_results['accuracy']:.4f}")
+        else:
+            print(f"CV R2 Score: {cv_results['r2_mean']:.4f}")
+            print(f"Test R2 Score: {test_results['r2']:.4f}")
+            print(f"Test RMSE: {test_results['rmse']:.4f}")
+            print(f"Test MAE: {test_results['mae']:.4f}")
+            # Show prediction vs actual comparison
+            best_model_obj = pipeline.trainer.models[best_model]
+            test_predictions = best_model_obj.predict(pipeline.X_test)
+            print(f"\nPrediction Quality Check:")
+            print(f"Predictions range: [{test_predictions.min():.2f}, {test_predictions.max():.2f}]")
+            print(f"Predictions mean: {test_predictions.mean():.2f}")
+            print(f"Actual mean: {pipeline.y_test.mean():.2f}")
+            print(f"Mean Absolute Error: {test_results['mae']:.2f}")
+            print(f"Root Mean Squared Error: {test_results['rmse']:.2f}")
         print(f"{'='*80}\n")
 
         # Save model with metadata for inference
@@ -389,27 +417,58 @@ async def train_automl(request: AutoMLRequest):
         all_test_results = []
         
         for _, row in pipeline.cv_results.iterrows():
-            all_cv_results.append({
-                "model_name": row['model_name'],
-                "accuracy": float(row['accuracy_mean']),
-                "precision": float(row['precision_mean']),
-                "recall": float(row['recall_mean']),
-                "f1": float(row['f1_mean']),
-                "training_time": float(row['training_time'])
-            })
+            if request.task_type == 'classification':
+                all_cv_results.append({
+                    "model_name": row['model_name'],
+                    "accuracy": float(row['accuracy_mean']),
+                    "precision": float(row['precision_mean']),
+                    "recall": float(row['recall_mean']),
+                    "f1": float(row['f1_mean']),
+                    "training_time": float(row['training_time'])
+                })
+            else:  # regression
+                all_cv_results.append({
+                    "model_name": row['model_name'],
+                    "r2": float(row['r2_mean']),
+                    "rmse": float(row['rmse_mean']),
+                    "mae": float(row['mae_mean']),
+                    "mse": float(row['mse_mean']),
+                    "training_time": float(row['training_time'])
+                })
         
         for _, row in pipeline.test_results.iterrows():
-            all_test_results.append({
-                "model_name": row['model_name'],
-                "accuracy": float(row['accuracy']),
-                "precision": float(row['precision']),
-                "recall": float(row['recall']),
-                "f1": float(row['f1'])
-            })
+            if request.task_type == 'classification':
+                all_test_results.append({
+                    "model_name": row['model_name'],
+                    "accuracy": float(row['accuracy']),
+                    "precision": float(row['precision']),
+                    "recall": float(row['recall']),
+                    "f1": float(row['f1'])
+                })
+            else:  # regression
+                all_test_results.append({
+                    "model_name": row['model_name'],
+                    "r2": float(row['r2']),
+                    "rmse": float(row['rmse']),
+                    "mae": float(row['mae']),
+                    "mse": float(row['mse'])
+                })
         
         # Get predictions from best model
         best_model_obj = pipeline.trainer.models[best_model]
-        predictions = best_model_obj.predict(pipeline.X_test)
+        
+        # For regression, predictions need to be in original scale
+        if request.task_type == 'regression' and hasattr(pipeline, 'target_scaler') and pipeline.target_scaler is not None:
+            # Model was trained on scaled targets, so predictions are scaled
+            predictions_scaled = best_model_obj.predict(pipeline.X_test)
+            predictions = pipeline.target_scaler.inverse_transform(predictions_scaled.reshape(-1, 1)).ravel()
+            actual_values = pipeline.y_test_original.values if hasattr(pipeline.y_test_original, 'values') else pipeline.y_test_original
+            print(f"\n[REGRESSION] Using original scale for predictions")
+            print(f"  Predictions range: [{predictions.min():.2f}, {predictions.max():.2f}]")
+            print(f"  Actual range: [{actual_values.min():.2f}, {actual_values.max():.2f}]")
+        else:
+            predictions = best_model_obj.predict(pipeline.X_test)
+            actual_values = pipeline.y_test.values if hasattr(pipeline.y_test, 'values') else pipeline.y_test
         
         # Store globally for session
         global LAST_TRAINED_PIPELINE, LAST_PROJECT_NAME
@@ -419,26 +478,45 @@ async def train_automl(request: AutoMLRequest):
         # Convert predictions to list
         predictions_list = predictions.tolist() if hasattr(predictions, 'tolist') else list(predictions)
 
-        return {
-            "status": "success",
-            "best_model": best_model,
-            "cv_scores": {
+        # Build response based on task type
+        if request.task_type == 'classification':
+            cv_scores = {
                 "accuracy": float(cv_results['accuracy_mean']),
                 "precision": float(cv_results['precision_mean']),
                 "recall": float(cv_results['recall_mean']),
                 "f1": float(cv_results['f1_mean'])
-            },
-            "test_scores": {
+            }
+            test_scores = {
                 "accuracy": float(test_results['accuracy']),
                 "precision": float(test_results['precision']),
                 "recall": float(test_results['recall']),
                 "f1": float(test_results['f1'])
-            },
+            }
+        else:  # regression
+            cv_scores = {
+                "r2": float(cv_results['r2_mean']),
+                "rmse": float(cv_results['rmse_mean']),
+                "mae": float(cv_results['mae_mean']),
+                "mse": float(cv_results['mse_mean'])
+            }
+            test_scores = {
+                "r2": float(test_results['r2']),
+                "rmse": float(test_results['rmse']),
+                "mae": float(test_results['mae']),
+                "mse": float(test_results['mse'])
+            }
+        
+        return {
+            "status": "success",
+            "best_model": best_model,
+            "task_type": request.task_type,
+            "cv_scores": cv_scores,
+            "test_scores": test_scores,
             "all_models_cv": all_cv_results,
             "all_models_test": all_test_results,
             "predictions": predictions_list,
-            "actual_labels": pipeline.y_test.tolist() if hasattr(pipeline.y_test, 'tolist') else list(pipeline.y_test),
-            "project_id": project_name,  # Return generated project name
+            "actual_labels": actual_values.tolist() if hasattr(actual_values, 'tolist') else list(actual_values),
+            "project_id": project_name,
             "dataset_shape": list(df.shape),
             "target_column": request.target_column,
             "training_samples": int(len(pipeline.X_train)),
@@ -581,7 +659,28 @@ async def predict_new_data(file: UploadFile = File(...), project_name: str = For
         best_model = pipeline.trainer.models[best_model_name]
         
         print(f"\nMaking predictions with {best_model_name}...")
+        print(f"Input data shape for prediction: {new_data.shape}")
+        print(f"Input data types: {new_data.dtypes.value_counts().to_dict()}")
+        print(f"Input data sample (first row):")
+        print(new_data.iloc[0])
+        print(f"Input data stats:")
+        print(new_data.describe())
+        
         predictions = best_model.predict(new_data)
+        
+        # For regression: inverse transform predictions to original scale
+        if metadata['task_type'] == 'regression' and hasattr(pipeline, 'target_scaler') and pipeline.target_scaler is not None:
+            print(f"\n[REGRESSION] Inverse transforming predictions to original scale...")
+            print(f"  Scaled predictions range: [{predictions.min():.2f}, {predictions.max():.2f}]")
+            predictions = pipeline.target_scaler.inverse_transform(predictions.reshape(-1, 1)).ravel()
+            print(f"  Original scale predictions range: [{predictions.min():.2f}, {predictions.max():.2f}]")
+        
+        print(f"\nPrediction results:")
+        print(f"Predictions shape: {predictions.shape}")
+        print(f"Predictions range: [{predictions.min():.2f}, {predictions.max():.2f}]")
+        print(f"Predictions mean: {predictions.mean():.2f}")
+        print(f"Predictions std: {predictions.std():.2f}")
+        print(f"First 10 predictions: {predictions[:10]}")
         
         # Replace any NaN in predictions
         predictions = np.nan_to_num(predictions, nan=0.0)
@@ -700,8 +799,139 @@ class ImageTrainingRequest(BaseModel):
     batch_size: int = 32
     learning_rate: float = 0.001
     test_size: float = 0.2
+    early_stopping_patience: int = 3
     model_names: List[str] = None
     project_name: str = "image_project"
+
+
+# ===================== VISUALIZATION DATA =====================
+@app.get("/automl/visualizations/{project_name}")
+async def get_visualization_data(project_name: str):
+    """
+    Get comprehensive visualization data for a trained model
+    """
+    try:
+        # Load model and metadata
+        model_path = os.path.join(MODEL_DIR, f"{project_name}_pipeline.pkl")
+        if not os.path.exists(model_path):
+            return {
+                "status": "error",
+                "error": f"Model not found: {project_name}"
+            }
+        
+        saved_data = joblib.load(model_path)
+        pipeline = saved_data['pipeline']
+        metadata = saved_data['metadata']
+        
+        task_type = metadata.get('task_type', 'classification')
+        
+        # Get predictions on test set
+        X_test = pipeline.X_test
+        y_test = pipeline.y_test_original if hasattr(pipeline, 'y_test_original') and pipeline.y_test_original is not None else pipeline.y_test
+        
+        # Convert to numpy array if needed
+        if hasattr(y_test, 'values'):
+            y_test = y_test.values
+        y_test = np.array(y_test)
+        
+        # Get the best model name and retrieve the actual model object
+        best_model_name = metadata.get('best_model')
+        if not best_model_name or best_model_name not in pipeline.trainer.trained_models:
+            return {
+                "status": "error",
+                "error": f"Best model '{best_model_name}' not found in trained models"
+            }
+        
+        best_model = pipeline.trainer.trained_models[best_model_name]
+        
+        # Get predictions from best model
+        if task_type == 'classification':
+            y_pred = best_model.predict(X_test)
+            y_pred_proba = None
+            if hasattr(best_model, 'predict_proba'):
+                y_pred_proba = best_model.predict_proba(X_test)
+        else:
+            # For regression, predict and inverse transform if needed
+            y_pred_scaled = best_model.predict(X_test)
+            if hasattr(pipeline, 'target_scaler') and pipeline.target_scaler is not None:
+                y_pred = pipeline.target_scaler.inverse_transform(y_pred_scaled.reshape(-1, 1)).ravel()
+            else:
+                y_pred = y_pred_scaled
+            y_pred_proba = None
+        
+        # Convert predictions to numpy array
+        if hasattr(y_pred, 'values'):
+            y_pred = y_pred.values
+        y_pred = np.array(y_pred)
+        
+        # Calculate residuals for regression
+        residuals = None
+        if task_type == 'regression':
+            residuals = (y_test - y_pred).tolist()
+        
+        # Get feature importance if available
+        feature_importance = None
+        if hasattr(best_model, 'feature_importances_'):
+            importance = best_model.feature_importances_
+            features = metadata.get('training_columns', [f"Feature_{i}" for i in range(len(importance))])
+            # Sort by importance
+            importance_dict = dict(zip(features, importance))
+            sorted_importance = sorted(importance_dict.items(), key=lambda x: x[1], reverse=True)
+            feature_importance = {
+                "features": [item[0] for item in sorted_importance[:20]],  # Top 20
+                "importance": [float(item[1]) for item in sorted_importance[:20]]
+            }
+        
+        # Check if test_results exists
+        if not hasattr(pipeline, 'test_results') or pipeline.test_results is None:
+            return {
+                "status": "error",
+                "error": "Test results not found in pipeline. Please retrain the model."
+            }
+        
+        # Prepare response
+        viz_data = {
+            "status": "success",
+            "task_type": task_type,
+            "project_name": project_name,
+            "predictions": {
+                "actual": y_test.tolist() if hasattr(y_test, 'tolist') else list(y_test),
+                "predicted": y_pred.tolist() if hasattr(y_pred, 'tolist') else list(y_pred),
+                "probabilities": y_pred_proba.tolist() if y_pred_proba is not None else None,
+                "residuals": residuals
+            },
+            "feature_importance": feature_importance,
+            "model_comparison": {
+                "models": list(pipeline.test_results.keys()),
+                "scores": {}
+            }
+        }
+        
+        # Add model comparison scores
+        if task_type == 'classification':
+            viz_data["model_comparison"]["scores"] = {
+                "accuracy": [float(pipeline.test_results[model]['accuracy']) for model in pipeline.test_results.keys()],
+                "f1_score": [float(pipeline.test_results[model]['f1_score']) for model in pipeline.test_results.keys()],
+                "precision": [float(pipeline.test_results[model]['precision']) for model in pipeline.test_results.keys()],
+                "recall": [float(pipeline.test_results[model]['recall']) for model in pipeline.test_results.keys()]
+            }
+        else:
+            viz_data["model_comparison"]["scores"] = {
+                "r2": [float(pipeline.test_results[model]['r2']) for model in pipeline.test_results.keys()],
+                "rmse": [float(pipeline.test_results[model]['rmse']) for model in pipeline.test_results.keys()],
+                "mae": [float(pipeline.test_results[model]['mae']) for model in pipeline.test_results.keys()],
+                "mse": [float(pipeline.test_results[model]['mse']) for model in pipeline.test_results.keys()]
+            }
+        
+        return viz_data
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "error",
+            "error": str(e)
+        }
 
 
 @app.post("/automl/train-images")
@@ -749,6 +979,7 @@ async def train_images(request: ImageTrainingRequest):
             epochs=request.epochs,
             model_names=request.model_names,
             learning_rate=request.learning_rate,
+            early_stopping_patience=request.early_stopping_patience,
             pretrained=True,
             project_id=request.project_name
         )
@@ -973,4 +1204,86 @@ async def upload_images(request: Request):
         }
 
 
+# ===================== REPORT GENERATION =====================
+class ReportRequest(BaseModel):
+    project_name: str
+
+@app.post("/automl/generate-report")
+async def generate_automl_report(request: ReportRequest):
+    """Generate comprehensive report with visualizations"""
+    global LAST_TRAINED_PIPELINE, LAST_PROJECT_NAME
+    
+    try:
+        if LAST_TRAINED_PIPELINE is None:
+            return {
+                "status": "error",
+                "error": "No trained model found. Please train a model first."
+            }
+        
+        # Determine task type
+        task_type = LAST_TRAINED_PIPELINE.task_type
+        project_name = request.project_name or LAST_PROJECT_NAME or "aidex_project"
+        
+        print(f"\n{'='*80}")
+        print(f"GENERATING REPORT")
+        print(f"{'='*80}")
+        print(f"Project: {project_name}")
+        print(f"Task Type: {task_type}")
+        
+        # Create reports directory
+        reports_dir = os.path.join(os.path.dirname(__file__), '..', 'reports')
+        os.makedirs(reports_dir, exist_ok=True)
+        
+        # Generate report
+        report_path = generate_report(
+            LAST_TRAINED_PIPELINE,
+            task_type,
+            project_name,
+            reports_dir
+        )
+        
+        print(f"✓ Report generated: {report_path}")
+        print(f"{'='*80}\n")
+        
+        return {
+            "status": "success",
+            "report_path": report_path,
+            "report_filename": os.path.basename(report_path),
+            "message": "Report generated successfully"
+        }
+        
+    except Exception as e:
+        print(f"\n❌ ERROR generating report: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.get("/automl/download-report/{filename}")
+async def download_report(filename: str):
+    """Download generated report"""
+    try:
+        reports_dir = os.path.join(os.path.dirname(__file__), '..', 'reports')
+        report_path = os.path.join(reports_dir, filename)
+        
+        if not os.path.exists(report_path):
+            return {
+                "status": "error",
+                "error": "Report file not found"
+            }
+        
+        return FileResponse(
+            report_path,
+            media_type='text/html',
+            filename=filename
+        )
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
 

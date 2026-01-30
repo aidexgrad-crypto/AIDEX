@@ -187,6 +187,7 @@ export default function PreprocessingPage() {
   const [isTraining, setIsTraining] = useState(false);
   const [trainingResults, setTrainingResults] = useState<any>(null);
   const [trainingError, setTrainingError] = useState<string | null>(null);
+  const [detectedTaskType, setDetectedTaskType] = useState<string>("classification");
 
   // Prediction states
   const [predictFile, setPredictFile] = useState<File | null>(null);
@@ -735,6 +736,46 @@ export default function PreprocessingPage() {
   /* =========================
      AUTOML TRAINING
   ========================= */
+  const detectTaskType = (targetCol: string, rows: any[]): string => {
+    if (!rows || rows.length === 0) return "classification";
+    
+    // Get all target values
+    const targetValues = rows.map(row => row[targetCol]).filter(v => v !== null && v !== undefined);
+    if (targetValues.length === 0) return "classification";
+    
+    // Count unique values
+    const uniqueValues = new Set(targetValues);
+    const uniqueCount = uniqueValues.size;
+    const totalCount = targetValues.length;
+    
+    // Check if values are numeric
+    const allNumeric = targetValues.every(v => typeof v === 'number' || !isNaN(Number(v)));
+    
+    // Decision logic:
+    // 1. If too many unique values (> 20% of total), likely regression
+    // 2. If all numeric and high cardinality, likely regression
+    // 3. If numeric with large ranges (> 1000), likely regression
+    if (allNumeric) {
+      const numericValues = targetValues.map(v => Number(v));
+      const min = Math.min(...numericValues);
+      const max = Math.max(...numericValues);
+      const range = max - min;
+      
+      // If large range (e.g., prices, salaries), it's regression
+      if (range > 1000 || uniqueCount > totalCount * 0.2) {
+        return "regression";
+      }
+    }
+    
+    // Default to classification if few unique values
+    if (uniqueCount <= 20) {
+      return "classification";
+    }
+    
+    // High cardinality suggests regression
+    return "regression";
+  };
+
   const handleTrainAutoML = async () => {
     if (!state.targetColumn) {
       setTrainingError("Please select a target column first");
@@ -751,6 +792,11 @@ export default function PreprocessingPage() {
     setTrainingResults(null);
 
     try {
+      // Auto-detect task type based on target column
+      const detectedTaskType = detectTaskType(state.targetColumn, structured?.rows || []);
+      console.log(`Auto-detected task type: ${detectedTaskType}`);
+      setDetectedTaskType(detectedTaskType);
+      
       const response = await fetch("/api/automl/train", {
         method: "POST",
         headers: {
@@ -758,7 +804,7 @@ export default function PreprocessingPage() {
         },
         body: JSON.stringify({
           target_column: state.targetColumn,
-          task_type: "classification",
+          task_type: detectedTaskType,
           test_size: 0.2,
           scaling_method: "standard",
           selection_priority: "balanced",
@@ -1297,61 +1343,123 @@ export default function PreprocessingPage() {
                         gap: 12,
                       }}
                     >
-                      <div
-                        style={{
-                          borderRadius: 10,
-                          border: "1px solid var(--border)",
-                          background: "rgba(15, 23, 42, 0.03)",
-                          padding: 12,
-                        }}
-                      >
-                        <p style={{ fontSize: 11, color: "var(--muted)" }}>Test Accuracy</p>
-                        <p style={{ fontSize: 18, fontWeight: 800 }}>
-                          {(trainingResults.test_scores.accuracy * 100).toFixed(2)}%
-                        </p>
-                      </div>
+                      {detectedTaskType === "classification" ? (
+                        <>
+                          <div
+                            style={{
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(15, 23, 42, 0.03)",
+                              padding: 12,
+                            }}
+                          >
+                            <p style={{ fontSize: 11, color: "var(--muted)" }}>Test Accuracy</p>
+                            <p style={{ fontSize: 18, fontWeight: 800 }}>
+                              {(trainingResults.test_scores.accuracy * 100).toFixed(2)}%
+                            </p>
+                          </div>
 
-                      <div
-                        style={{
-                          borderRadius: 10,
-                          border: "1px solid var(--border)",
-                          background: "rgba(15, 23, 42, 0.03)",
-                          padding: 12,
-                        }}
-                      >
-                        <p style={{ fontSize: 11, color: "var(--muted)" }}>F1 Score</p>
-                        <p style={{ fontSize: 18, fontWeight: 800 }}>
-                          {(trainingResults.test_scores.f1 * 100).toFixed(2)}%
-                        </p>
-                      </div>
+                          <div
+                            style={{
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(15, 23, 42, 0.03)",
+                              padding: 12,
+                            }}
+                          >
+                            <p style={{ fontSize: 11, color: "var(--muted)" }}>F1 Score</p>
+                            <p style={{ fontSize: 18, fontWeight: 800 }}>
+                              {(trainingResults.test_scores.f1 * 100).toFixed(2)}%
+                            </p>
+                          </div>
 
-                      <div
-                        style={{
-                          borderRadius: 10,
-                          border: "1px solid var(--border)",
-                          background: "rgba(15, 23, 42, 0.03)",
-                          padding: 12,
-                        }}
-                      >
-                        <p style={{ fontSize: 11, color: "var(--muted)" }}>Precision</p>
-                        <p style={{ fontSize: 18, fontWeight: 800 }}>
-                          {(trainingResults.test_scores.precision * 100).toFixed(2)}%
-                        </p>
-                      </div>
+                          <div
+                            style={{
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(15, 23, 42, 0.03)",
+                              padding: 12,
+                            }}
+                          >
+                            <p style={{ fontSize: 11, color: "var(--muted)" }}>Precision</p>
+                            <p style={{ fontSize: 18, fontWeight: 800 }}>
+                              {(trainingResults.test_scores.precision * 100).toFixed(2)}%
+                            </p>
+                          </div>
 
-                      <div
-                        style={{
-                          borderRadius: 10,
-                          border: "1px solid var(--border)",
-                          background: "rgba(15, 23, 42, 0.03)",
-                          padding: 12,
-                        }}
-                      >
-                        <p style={{ fontSize: 11, color: "var(--muted)" }}>Recall</p>
-                        <p style={{ fontSize: 18, fontWeight: 800 }}>
-                          {(trainingResults.test_scores.recall * 100).toFixed(2)}%
-                        </p>
-                      </div>
+                          <div
+                            style={{
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(15, 23, 42, 0.03)",
+                              padding: 12,
+                            }}
+                          >
+                            <p style={{ fontSize: 11, color: "var(--muted)" }}>Recall</p>
+                            <p style={{ fontSize: 18, fontWeight: 800 }}>
+                              {(trainingResults.test_scores.recall * 100).toFixed(2)}%
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div
+                            style={{
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(15, 23, 42, 0.03)",
+                              padding: 12,
+                            }}
+                          >
+                            <p style={{ fontSize: 11, color: "var(--muted)" }}>R² Score</p>
+                            <p style={{ fontSize: 18, fontWeight: 800 }}>
+                              {trainingResults.test_scores.r2?.toFixed(4) || "N/A"}
+                            </p>
+                          </div>
+
+                          <div
+                            style={{
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(15, 23, 42, 0.03)",
+                              padding: 12,
+                            }}
+                          >
+                            <p style={{ fontSize: 11, color: "var(--muted)" }}>RMSE</p>
+                            <p style={{ fontSize: 18, fontWeight: 800 }}>
+                              {trainingResults.test_scores.rmse?.toFixed(2) || "N/A"}
+                            </p>
+                          </div>
+
+                          <div
+                            style={{
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(15, 23, 42, 0.03)",
+                              padding: 12,
+                            }}
+                          >
+                            <p style={{ fontSize: 11, color: "var(--muted)" }}>MAE</p>
+                            <p style={{ fontSize: 18, fontWeight: 800 }}>
+                              {trainingResults.test_scores.mae?.toFixed(2) || "N/A"}
+                            </p>
+                          </div>
+
+                          <div
+                            style={{
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(15, 23, 42, 0.03)",
+                              padding: 12,
+                            }}
+                          >
+                            <p style={{ fontSize: 11, color: "var(--muted)" }}>MSE</p>
+                            <p style={{ fontSize: 18, fontWeight: 800 }}>
+                              {trainingResults.test_scores.mse?.toFixed(2) || "N/A"}
+                            </p>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <p className="text-xs" style={{ color: "var(--muted)", marginTop: 12 }}>
@@ -1403,15 +1511,26 @@ export default function PreprocessingPage() {
                       <thead>
                         <tr style={{ borderBottom: "1px solid var(--border)" }}>
                           <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700 }}>Model</th>
-                          <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>Accuracy</th>
-                          <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>F1 Score</th>
-                          <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>Precision</th>
-                          <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>Recall</th>
+                          {detectedTaskType === "classification" ? (
+                            <>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>Accuracy</th>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>F1 Score</th>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>Precision</th>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>Recall</th>
+                            </>
+                          ) : (
+                            <>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>R² Score</th>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>RMSE</th>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>MAE</th>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700 }}>MSE</th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
                         {trainingResults.all_models_test
-                          .sort((a: any, b: any) => b.f1 - a.f1)
+                          .sort((a: any, b: any) => detectedTaskType === "classification" ? b.f1 - a.f1 : b.r2 - a.r2)
                           .map((model: any, idx: number) => (
                             <tr
                               key={model.model_name}
@@ -1423,18 +1542,37 @@ export default function PreprocessingPage() {
                               <td style={{ padding: "10px 12px", fontWeight: model.model_name === trainingResults.best_model ? 700 : 400 }}>
                                 {model.model_name === trainingResults.best_model ? "★ " : ""}{model.model_name}
                               </td>
-                              <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                                {(model.accuracy * 100).toFixed(2)}%
-                              </td>
-                              <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                                {(model.f1 * 100).toFixed(2)}%
-                              </td>
-                              <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                                {(model.precision * 100).toFixed(2)}%
-                              </td>
-                              <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                                {(model.recall * 100).toFixed(2)}%
-                              </td>
+                              {detectedTaskType === "classification" ? (
+                                <>
+                                  <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                    {(model.accuracy * 100).toFixed(2)}%
+                                  </td>
+                                  <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                    {(model.f1 * 100).toFixed(2)}%
+                                  </td>
+                                  <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                    {(model.precision * 100).toFixed(2)}%
+                                  </td>
+                                  <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                    {(model.recall * 100).toFixed(2)}%
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                    {model.r2?.toFixed(4) || "N/A"}
+                                  </td>
+                                  <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                    {model.rmse?.toFixed(2) || "N/A"}
+                                  </td>
+                                  <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                    {model.mae?.toFixed(2) || "N/A"}
+                                  </td>
+                                  <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                    {model.mse?.toFixed(2) || "N/A"}
+                                  </td>
+                                </>
+                              )}
                             </tr>
                           ))}
                       </tbody>
@@ -1837,10 +1975,11 @@ export default function PreprocessingPage() {
                         },
                         body: JSON.stringify({
                           image_data: imageData,
-                          epochs: 10,
+                          epochs: 5,  // Reduced from 10 to 5 for faster training
                           batch_size: 32,
                           learning_rate: 0.001,
                           test_size: 0.2,
+                          early_stopping_patience: 2,  // Stop after 2 epochs without improvement
                           model_names: ["mobilenet_v2"],
                           project_name: `image_${Date.now()}`
                         }),
