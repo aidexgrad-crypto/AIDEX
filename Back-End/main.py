@@ -19,6 +19,7 @@ from Data_Pre_Processing.Data_quality_engine import DataQualityEngine
 from aidex_pipeline import run_aidex
 from image_pipeline import run_image_pipeline, ImagePipeline
 from Visualization.report_generator import generate_report
+from Explainability.explainability_api import get_explanation_context, generate_and_save_plots
 
 app = FastAPI()
 
@@ -1286,4 +1287,156 @@ async def download_report(filename: str):
             "status": "error",
             "error": str(e)
         }
+
+
+# ===================== EXPLAINABILITY =====================
+@app.post("/automl/explain-tabular")
+async def explain_tabular_model(request: Request):
+    """Generate explainability for the best tabular model"""
+    global LAST_TRAINED_PIPELINE, LAST_PROJECT_NAME
+    
+    try:
+        print(f"\n{'='*80}")
+        print("GENERATING EXPLAINABILITY FOR TABULAR MODEL")
+        print(f"{'='*80}\n")
+        
+        # Get project_name from request body
+        body = await request.json()
+        project_name = body.get("project_name", LAST_PROJECT_NAME)
+        
+        # Load pipeline from disk if not in memory
+        pipeline = None
+        if project_name:
+            model_path = os.path.join(MODEL_DIR, f"{project_name}_pipeline.pkl")
+            if os.path.exists(model_path):
+                print(f"Loading model from: {model_path}")
+                saved_data = joblib.load(model_path)
+                pipeline = saved_data['pipeline']
+                print(f"✓ Model loaded from disk")
+            else:
+                print(f"Model file not found: {model_path}")
+        
+        # Fall back to in-memory pipeline if disk load failed
+        if pipeline is None:
+            pipeline = LAST_TRAINED_PIPELINE
+        
+        if pipeline is None:
+            return {
+                "status": "error",
+                "error": "No trained model available. Please train a model first or provide a valid project_name."
+            }
+        
+        # Get the best model
+        best_model_name = pipeline.best_model_name
+        best_model = pipeline.trainer.models.get(best_model_name)
+        
+        if best_model is None:
+            return {
+                "status": "error",
+                "error": f"Best model {best_model_name} not found in pipeline.trainer.models"
+            }
+        
+        # Get model metrics from test_results DataFrame
+        best_test_row = pipeline.test_results[pipeline.test_results['model_name'] == best_model_name]
+        
+        if best_test_row.empty:
+            return {
+                "status": "error",
+                "error": f"No test results found for {best_model_name}"
+            }
+        
+        best_test_row = best_test_row.iloc[0]
+        
+        # Build model metrics based on task type
+        if pipeline.task_type == "classification":
+            model_metrics = {
+                "accuracy": float(best_test_row.get("accuracy", 0)),
+                "f1_score": float(best_test_row.get("f1", 0)),
+                "precision": float(best_test_row.get("precision", 0)),
+                "recall": float(best_test_row.get("recall", 0)),
+            }
+        else:  # regression
+            model_metrics = {
+                "r2_score": float(best_test_row.get("r2", 0)),
+                "rmse": float(best_test_row.get("rmse", 0)),
+                "mae": float(best_test_row.get("mae", 0)),
+            }
+        
+        # Generate explanation context
+        explanation_ctx = get_explanation_context(
+            model=best_model,
+            X_train=pipeline.X_train,
+            X_test=pipeline.X_test,
+            index=0,
+            top_n=5,
+            model_metrics=model_metrics
+        )
+        
+        # Generate and save plots
+        explainability_dir = os.path.join(os.path.dirname(__file__), 'explainability_plots')
+        plot_paths = generate_and_save_plots(
+            model=best_model,
+            X_train=pipeline.X_train,
+            X_test=pipeline.X_test,
+            index=0,
+            output_dir=explainability_dir
+        )
+        
+        print(f"✓ Explainability generated successfully")
+        print(f"  Plots saved to: {explainability_dir}")
+        
+        return {
+            "status": "success",
+            "model_name": best_model_name,
+            "task_type": pipeline.task_type,
+            "global_explanation": explanation_ctx["global_explanation"],
+            "local_explanation": explanation_ctx["local_explanation"],
+            "feature_impact": explanation_ctx["feature_impact"],
+            "model_performance": explanation_ctx["model_performance"],
+            "limitations": explanation_ctx["limitations"],
+            "lime_explanation": explanation_ctx.get("lime_explanation", ""),
+            "plot_paths": plot_paths
+        }
+        
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"\n{'='*80}")
+        print("ERROR IN EXPLAINABILITY GENERATION")
+        print(f"{'='*80}")
+        print(error_trace)
+        print(f"{'='*80}\n")
+        
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": error_trace
+        }
+
+
+@app.get("/automl/explainability-plot/{filename}")
+async def get_explainability_plot(filename: str):
+    """Serve explainability plot images"""
+    try:
+        explainability_dir = os.path.join(os.path.dirname(__file__), 'explainability_plots')
+        plot_path = os.path.join(explainability_dir, filename)
+        
+        if not os.path.exists(plot_path):
+            return {
+                "status": "error",
+                "error": "Plot file not found"
+            }
+        
+        return FileResponse(
+            plot_path,
+            media_type='image/png',
+            filename=filename
+        )
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
 

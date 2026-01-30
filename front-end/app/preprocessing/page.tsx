@@ -189,6 +189,11 @@ export default function PreprocessingPage() {
   const [trainingError, setTrainingError] = useState<string | null>(null);
   const [detectedTaskType, setDetectedTaskType] = useState<string>("classification");
 
+  // Explainability states
+  const [isGeneratingExplanation, setIsGeneratingExplanation] = useState(false);
+  const [explanationResults, setExplanationResults] = useState<any>(null);
+  const [explanationError, setExplanationError] = useState<string | null>(null);
+
   // Prediction states
   const [predictFile, setPredictFile] = useState<File | null>(null);
   const [isPredicting, setIsPredicting] = useState(false);
@@ -1578,6 +1583,175 @@ export default function PreprocessingPage() {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              )}
+
+              {/* EXPLAINABILITY SECTION */}
+              {trainingResults && trainingResults.status === "success" && (
+                <div
+                  style={{
+                    marginTop: 16,
+                    padding: 16,
+                    borderRadius: 14,
+                    border: "1px solid #8b5cf6",
+                    background: "rgba(139, 92, 246, 0.05)",
+                  }}
+                >
+                  <p style={{ fontSize: 16, fontWeight: 800, marginBottom: 8, color: "#8b5cf6" }}>
+                    🔍 Model Explainability
+                  </p>
+
+                  <p className="text-sm" style={{ color: "var(--muted)", marginBottom: 12 }}>
+                    Understand how the {trainingResults.best_model} model makes predictions using SHAP and LIME explanations.
+                  </p>
+
+                  <button
+                    onClick={async () => {
+                      setIsGeneratingExplanation(true);
+                      setExplanationError(null);
+                      setExplanationResults(null);
+
+                      try {
+                        const response = await fetch("/api/automl/explain-tabular", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({
+                            project_name: trainingResults.project_id
+                          }),
+                        });
+
+                        const data = await response.json();
+
+                        if (data.error) {
+                          setExplanationError(data.error);
+                        } else if (data.status === "success") {
+                          setExplanationResults(data);
+                        } else {
+                          setExplanationError("Failed to generate explanation");
+                        }
+                      } catch (error) {
+                        console.error("Explainability error:", error);
+                        setExplanationError(
+                          `Failed to generate explanation: ${error instanceof Error ? error.message : String(error)}`
+                        );
+                      } finally {
+                        setIsGeneratingExplanation(false);
+                      }
+                    }}
+                    disabled={isGeneratingExplanation}
+                    style={{
+                      padding: "10px 18px",
+                      borderRadius: 8,
+                      border: "none",
+                      background: isGeneratingExplanation ? "#6b21a8" : "#8b5cf6",
+                      color: "white",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: isGeneratingExplanation ? "not-allowed" : "pointer",
+                      opacity: isGeneratingExplanation ? 0.6 : 1,
+                    }}
+                  >
+                    {isGeneratingExplanation ? "Generating Explanation..." : "Generate Model Explanation"}
+                  </button>
+
+                  {explanationError && (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: 12,
+                        borderRadius: 10,
+                        border: "1px solid #ef4444",
+                        background: "rgba(239, 68, 68, 0.1)",
+                      }}
+                    >
+                      <p style={{ fontSize: 12, fontWeight: 600, color: "#ef4444" }}>
+                        ❌ Explanation Error
+                      </p>
+                      <p className="text-xs" style={{ color: "#dc2626", marginTop: 4 }}>
+                        {explanationError}
+                      </p>
+                    </div>
+                  )}
+
+                  {explanationResults && explanationResults.status === "success" && (
+                    <div
+                      style={{
+                        marginTop: 16,
+                        padding: 16,
+                        borderRadius: 12,
+                        border: "1px solid #10b981",
+                        background: "rgba(16, 185, 129, 0.08)",
+                      }}
+                    >
+                      <p style={{ fontSize: 15, fontWeight: 700, color: "#10b981", marginBottom: 12 }}>
+                        ✓ Explanation Generated!
+                      </p>
+
+                      <div style={{ marginBottom: 16 }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#8b5cf6" }}>
+                          Global Explanation (Model-Level):
+                        </p>
+                        <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--muted)" }}>
+                          {explanationResults.global_explanation}
+                        </p>
+                      </div>
+
+                      <div style={{ marginBottom: 16 }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#8b5cf6" }}>
+                          Local Explanation (Sample Prediction):
+                        </p>
+                        <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--muted)" }}>
+                          {explanationResults.local_explanation}
+                        </p>
+                      </div>
+
+                      <div style={{ marginBottom: 16 }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#8b5cf6" }}>
+                          Model Performance:
+                        </p>
+                        <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--muted)" }}>
+                          {explanationResults.model_performance}
+                        </p>
+                      </div>
+
+                      <div style={{ marginBottom: 16 }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#8b5cf6" }}>
+                          Top Feature Impacts:
+                        </p>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {explanationResults.feature_impact && explanationResults.feature_impact.slice(0, 5).map(([feature, value]: [string, number], idx: number) => (
+                            <div
+                              key={idx}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                padding: "8px 12px",
+                                borderRadius: 8,
+                                border: "1px solid var(--border)",
+                                background: "rgba(15, 23, 42, 0.3)",
+                              }}
+                            >
+                              <span style={{ fontSize: 13, fontWeight: 600 }}>{feature}</span>
+                              <span style={{ fontSize: 13, color: value > 0 ? "#10b981" : "#ef4444" }}>
+                                {value > 0 ? "+" : ""}{value.toFixed(4)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#8b5cf6" }}>
+                          Limitations:
+                        </p>
+                        <p style={{ fontSize: 12, lineHeight: 1.6, color: "var(--muted)", fontStyle: "italic" }}>
+                          {explanationResults.limitations}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
