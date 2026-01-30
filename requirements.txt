@@ -1,1 +1,1 @@
-streamlit\nfastapi\nscikit-learn\npandas\nmatplotlib\nshap\noptuna
+streamlit\nfastapi\nscikit-learn\npandas\nmatplotlib\nshap\noptuna\nopenai==2.16.0
