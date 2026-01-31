@@ -48,6 +48,11 @@ LAST_TRAINED_PIPELINE = None
 LAST_PROJECT_NAME = None
 LAST_IMAGE_PIPELINE = None
 
+# ===================== HEALTH CHECK =====================
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "message": "AIDEX Backend is running"}
+
 # ===================== ANALYZE =====================
 @app.post("/data-quality/analyze")
 async def analyze_data(file: UploadFile = File(...)):
@@ -232,6 +237,17 @@ async def clean_data(request: CleanDataRequest):
             print(f"[DEBUG] Final target unique values: {df[request.target_column].unique()}")
             print(f"[DEBUG] Final target distribution:\n{df[request.target_column].value_counts()}")
         
+        # CRITICAL: Remove rows with NaN in target column (required for ML)
+        if request.target_column and request.target_column in df.columns:
+            target_missing = df[request.target_column].isnull().sum()
+            if target_missing > 0:
+                rows_before = len(df)
+                df = df.dropna(subset=[request.target_column])
+                rows_dropped = rows_before - len(df)
+                summary["notes"].append(f"Removed {rows_dropped} rows with missing target values")
+                summary["after_rows"] = len(df)
+                print(f"\n[INFO] Dropped {rows_dropped} rows with missing target column values")
+        
         # Save cleaned data
         import time
         cleaned_filename = f"cleaned_{int(time.time())}.csv"
@@ -243,9 +259,13 @@ async def clean_data(request: CleanDataRequest):
         # Return cleaned data and summary (optimized for large datasets)
         # Only return first 1000 rows for preview, full data is saved in CSV
         preview_size = min(1000, len(df))
+        
+        # Convert NaN to None for JSON compatibility
+        preview_df = df.head(preview_size).replace({np.nan: None})
+        
         return {
             "status": "success",
-            "cleaned_data": df.head(preview_size).to_dict('records'),
+            "cleaned_data": preview_df.to_dict('records'),
             "summary": summary,
             "cleaned_file_path": CLEANED_FILE_PATH,
             "total_rows": len(df),
@@ -717,12 +737,10 @@ async def predict_new_data(file: UploadFile = File(...), project_name: str = For
                 for i, class_label in enumerate(classes):
                     results_df[f'probability_class_{class_label}'] = probabilities[:, i]
         
-        # Replace NaN values with None for JSON serialization
-        results_df = results_df.fillna(value=None)
+        # Convert to dict and handle NaN values for JSON serialization
+        results_dict = results_df.replace({np.nan: None}).to_dict('records')
         
-        # Convert to dict with additional NaN handling
-        results_dict = results_df.to_dict('records')
-        # Clean any remaining NaN values (in case fillna didn't catch them all)
+        # Clean any remaining NaN/inf values
         import math
         def clean_value(v):
             if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
