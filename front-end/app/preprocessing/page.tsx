@@ -797,10 +797,12 @@ export default function PreprocessingPage() {
     setTrainingResults(null);
 
     try {
-      // Auto-detect task type based on target column
-      const detectedTaskType = detectTaskType(state.targetColumn, structured?.rows || []);
-      console.log(`Auto-detected task type: ${detectedTaskType}`);
-      setDetectedTaskType(detectedTaskType);
+      // Map user's choice to task type
+      // "predictCategory" → classification
+      // "predictNumber" → regression
+      const taskType = state.taskChoice === "predictNumber" ? "regression" : "classification";
+      console.log(`Task type from user selection: ${taskType} (user chose: ${state.taskChoice})`);
+      setDetectedTaskType(taskType);
       
       const response = await fetch("/api/automl/train", {
         method: "POST",
@@ -809,7 +811,7 @@ export default function PreprocessingPage() {
         },
         body: JSON.stringify({
           target_column: state.targetColumn,
-          task_type: detectedTaskType,
+          task_type: taskType,
           test_size: 0.2,
           scaling_method: "standard",
           selection_priority: "balanced",
@@ -1586,175 +1588,6 @@ export default function PreprocessingPage() {
                 </div>
               )}
 
-              {/* EXPLAINABILITY SECTION */}
-              {trainingResults && trainingResults.status === "success" && (
-                <div
-                  style={{
-                    marginTop: 16,
-                    padding: 16,
-                    borderRadius: 14,
-                    border: "1px solid #8b5cf6",
-                    background: "rgba(139, 92, 246, 0.05)",
-                  }}
-                >
-                  <p style={{ fontSize: 16, fontWeight: 800, marginBottom: 8, color: "#8b5cf6" }}>
-                    🔍 Model Explainability
-                  </p>
-
-                  <p className="text-sm" style={{ color: "var(--muted)", marginBottom: 12 }}>
-                    Understand how the {trainingResults.best_model} model makes predictions using SHAP and LIME explanations.
-                  </p>
-
-                  <button
-                    onClick={async () => {
-                      setIsGeneratingExplanation(true);
-                      setExplanationError(null);
-                      setExplanationResults(null);
-
-                      try {
-                        const response = await fetch("/api/automl/explain-tabular", {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "application/json",
-                          },
-                          body: JSON.stringify({
-                            project_name: trainingResults.project_id
-                          }),
-                        });
-
-                        const data = await response.json();
-
-                        if (data.error) {
-                          setExplanationError(data.error);
-                        } else if (data.status === "success") {
-                          setExplanationResults(data);
-                        } else {
-                          setExplanationError("Failed to generate explanation");
-                        }
-                      } catch (error) {
-                        console.error("Explainability error:", error);
-                        setExplanationError(
-                          `Failed to generate explanation: ${error instanceof Error ? error.message : String(error)}`
-                        );
-                      } finally {
-                        setIsGeneratingExplanation(false);
-                      }
-                    }}
-                    disabled={isGeneratingExplanation}
-                    style={{
-                      padding: "10px 18px",
-                      borderRadius: 8,
-                      border: "none",
-                      background: isGeneratingExplanation ? "#6b21a8" : "#8b5cf6",
-                      color: "white",
-                      fontSize: 14,
-                      fontWeight: 600,
-                      cursor: isGeneratingExplanation ? "not-allowed" : "pointer",
-                      opacity: isGeneratingExplanation ? 0.6 : 1,
-                    }}
-                  >
-                    {isGeneratingExplanation ? "Generating Explanation..." : "Generate Model Explanation"}
-                  </button>
-
-                  {explanationError && (
-                    <div
-                      style={{
-                        marginTop: 12,
-                        padding: 12,
-                        borderRadius: 10,
-                        border: "1px solid #ef4444",
-                        background: "rgba(239, 68, 68, 0.1)",
-                      }}
-                    >
-                      <p style={{ fontSize: 12, fontWeight: 600, color: "#ef4444" }}>
-                        ❌ Explanation Error
-                      </p>
-                      <p className="text-xs" style={{ color: "#dc2626", marginTop: 4 }}>
-                        {explanationError}
-                      </p>
-                    </div>
-                  )}
-
-                  {explanationResults && explanationResults.status === "success" && (
-                    <div
-                      style={{
-                        marginTop: 16,
-                        padding: 16,
-                        borderRadius: 12,
-                        border: "1px solid #10b981",
-                        background: "rgba(16, 185, 129, 0.08)",
-                      }}
-                    >
-                      <p style={{ fontSize: 15, fontWeight: 700, color: "#10b981", marginBottom: 12 }}>
-                        ✓ Explanation Generated!
-                      </p>
-
-                      <div style={{ marginBottom: 16 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#8b5cf6" }}>
-                          Global Explanation (Model-Level):
-                        </p>
-                        <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--muted)" }}>
-                          {explanationResults.global_explanation}
-                        </p>
-                      </div>
-
-                      <div style={{ marginBottom: 16 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#8b5cf6" }}>
-                          Local Explanation (Sample Prediction):
-                        </p>
-                        <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--muted)" }}>
-                          {explanationResults.local_explanation}
-                        </p>
-                      </div>
-
-                      <div style={{ marginBottom: 16 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#8b5cf6" }}>
-                          Model Performance:
-                        </p>
-                        <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--muted)" }}>
-                          {explanationResults.model_performance}
-                        </p>
-                      </div>
-
-                      <div style={{ marginBottom: 16 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#8b5cf6" }}>
-                          Top Feature Impacts:
-                        </p>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          {explanationResults.feature_impact && explanationResults.feature_impact.slice(0, 5).map(([feature, value]: [string, number], idx: number) => (
-                            <div
-                              key={idx}
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                padding: "8px 12px",
-                                borderRadius: 8,
-                                border: "1px solid var(--border)",
-                                background: "rgba(15, 23, 42, 0.3)",
-                              }}
-                            >
-                              <span style={{ fontSize: 13, fontWeight: 600 }}>{feature}</span>
-                              <span style={{ fontSize: 13, color: value > 0 ? "#10b981" : "#ef4444" }}>
-                                {value > 0 ? "+" : ""}{value.toFixed(4)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#8b5cf6" }}>
-                          Limitations:
-                        </p>
-                        <p style={{ fontSize: 12, lineHeight: 1.6, color: "var(--muted)", fontStyle: "italic" }}>
-                          {explanationResults.limitations}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* PREDICT ON NEW DATA SECTION */}
               {trainingResults && trainingResults.status === "success" && (
                 <div
@@ -1944,6 +1777,367 @@ export default function PreprocessingPage() {
                             ))}
                           </tbody>
                         </table>
+                      </div>
+
+                      {/* Generate Detailed Report Button */}
+                      <div style={{ marginTop: 20, textAlign: "center" }}>
+                        <button
+                          onClick={async () => {
+                            if (explanationResults) {
+                              // Scroll to report section
+                              document.getElementById("comprehensive-report")?.scrollIntoView({ behavior: "smooth" });
+                            } else {
+                              // Generate explanation directly
+                              setIsGeneratingExplanation(true);
+                              setExplanationError(null);
+
+                              try {
+                                const response = await fetch("/api/automl/explain-tabular", {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    project_name: trainingResults.project_id
+                                  }),
+                                });
+
+                                const data = await response.json();
+
+                                if (data.error) {
+                                  setExplanationError(data.error);
+                                } else if (data.status === "success") {
+                                  setExplanationResults(data);
+                                  setTimeout(() => {
+                                    document.getElementById("comprehensive-report")?.scrollIntoView({ behavior: "smooth" });
+                                  }, 300);
+                                } else {
+                                  setExplanationError("Failed to generate explanation");
+                                }
+                              } catch (error) {
+                                console.error("Explainability error:", error);
+                                setExplanationError(
+                                  `Failed to generate explanation: ${error instanceof Error ? error.message : String(error)}`
+                                );
+                              } finally {
+                                setIsGeneratingExplanation(false);
+                              }
+                            }
+                          }}
+                          disabled={isGeneratingExplanation}
+                          style={{
+                            padding: "12px 28px",
+                            borderRadius: 12,
+                            border: "none",
+                            background: isGeneratingExplanation ? "#6b21a8" : "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+                            color: "white",
+                            fontSize: 14,
+                            fontWeight: 700,
+                            cursor: isGeneratingExplanation ? "not-allowed" : "pointer",
+                            opacity: isGeneratingExplanation ? 0.6 : 1,
+                            boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)",
+                          }}
+                        >
+                          📊 {isGeneratingExplanation ? "Generating..." : explanationResults ? "View" : "Generate"} Complete Analysis Report
+                        </button>
+                        <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>
+                          View predictions, model performance, and understand how decisions were made
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* COMPREHENSIVE REPORT SECTION */}
+                  {explanationResults && explanationResults.status === "success" && predictionResults && (
+                    <div
+                      id="comprehensive-report"
+                      style={{
+                        marginTop: 20,
+                        padding: 20,
+                        borderRadius: 14,
+                        border: "2px solid #10b981",
+                        background: "linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%)",
+                      }}
+                    >
+                      <div style={{ marginBottom: 24, textAlign: "center" }}>
+                        <p style={{ fontSize: 22, fontWeight: 800, color: "#10b981", marginBottom: 8 }}>
+                          📊 Complete Analysis Report
+                        </p>
+                        <p style={{ fontSize: 14, color: "var(--muted)" }}>
+                          Prediction Results & Model Intelligence for {trainingResults.best_model}
+                        </p>
+                      </div>
+
+                      {/* SECTION 1: PREDICTION RESULTS SUMMARY */}
+                      <div style={{ marginBottom: 24, padding: 16, borderRadius: 12, border: "1px solid rgba(59, 130, 246, 0.3)", background: "rgba(0, 0, 0, 0.2)" }}>
+                        <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: "#3b82f6" }}>
+                          🎯 Prediction Results on New Data
+                        </p>
+                        
+                        {/* Explanation of what predictions represent */}
+                        <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: "rgba(59, 130, 246, 0.1)", border: "1px solid rgba(59, 130, 246, 0.2)" }}>
+                          <p style={{ fontSize: 13, lineHeight: 1.6, color: "#e2e8f0" }}>
+                            {detectedTaskType === "regression" ? (
+                              <>
+                                These predictions estimate the <strong style={{ color: "#60a5fa" }}>{state.targetColumn || "target value"}</strong> for each sample in your new data. 
+                                The model analyzed the input features and calculated the most likely numeric value based on patterns learned during training.
+                              </>
+                            ) : (
+                              <>
+                                These predictions classify the <strong style={{ color: "#60a5fa" }}>{state.targetColumn || "target category"}</strong> for each sample. 
+                                The model examined the input features and determined the most probable category based on patterns learned during training.
+                              </>
+                            )}
+                          </p>
+                        </div>
+                        
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+                          <div style={{ padding: 12, borderRadius: 10, border: "1px solid rgba(99, 102, 241, 0.3)", background: "rgba(99, 102, 241, 0.1)" }}>
+                            <p style={{ fontSize: 11, fontWeight: 600, color: "#8b5cf6", marginBottom: 4 }}>SAMPLES PREDICTED</p>
+                            <p style={{ fontSize: 18, fontWeight: 700, color: "white" }}>{predictionResults.num_samples}</p>
+                          </div>
+                          <div style={{ padding: 12, borderRadius: 10, border: "1px solid rgba(16, 185, 129, 0.3)", background: "rgba(16, 185, 129, 0.1)" }}>
+                            <p style={{ fontSize: 11, fontWeight: 600, color: "#10b981", marginBottom: 4 }}>MODEL USED</p>
+                            <p style={{ fontSize: 14, fontWeight: 700, color: "white" }}>{predictionResults.model_name}</p>
+                          </div>
+                          <div style={{ padding: 12, borderRadius: 10, border: "1px solid rgba(59, 130, 246, 0.3)", background: "rgba(59, 130, 246, 0.1)" }}>
+                            <p style={{ fontSize: 11, fontWeight: 600, color: "#3b82f6", marginBottom: 4 }}>TARGET COLUMN</p>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: "white" }}>
+                              {state.targetColumn || "N/A"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {Object.keys(predictionResults.prediction_distribution || {}).length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: "#e2e8f0" }}>
+                              Prediction Distribution:
+                            </p>
+                            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                              {Object.entries(predictionResults.prediction_distribution || {}).map(([label, count]: [string, any]) => (
+                                <div
+                                  key={label}
+                                  style={{
+                                    padding: "8px 14px",
+                                    borderRadius: 8,
+                                    border: "1px solid rgba(59, 130, 246, 0.4)",
+                                    background: "rgba(59, 130, 246, 0.15)",
+                                  }}
+                                >
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: "#60a5fa" }}>
+                                    {label}:
+                                  </span>
+                                  <span style={{ fontSize: 13, fontWeight: 600, marginLeft: 6, color: "white" }}>
+                                    {count}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Individual Predictions Table */}
+                        <div>
+                          <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: "#e2e8f0" }}>
+                            All Predictions ({predictionResults.predictions?.length || 0} samples):
+                          </p>
+                          <div
+                            style={{
+                              maxHeight: 400,
+                              overflowY: "auto",
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(15, 23, 42, 0.3)",
+                            }}
+                          >
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                              <thead style={{ position: "sticky", top: 0, background: "rgba(15, 23, 42, 0.95)", zIndex: 1 }}>
+                                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                                  <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700 }}>Sample #</th>
+                                  {/* Show first few columns from original data - only if predictions are objects */}
+                                  {predictionResults.predictions?.[0] && typeof predictionResults.predictions[0] === 'object' ? Object.keys(predictionResults.predictions[0])
+                                    .filter(k => !k.endsWith('_prediction') && !k.startsWith('probability'))
+                                    .slice(0, 3)
+                                    .map((key) => (
+                                      <th key={key} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700 }}>{key}</th>
+                                    )) : null}
+                                  <th style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700 }}>Prediction</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {predictionResults.predictions?.map((pred: any, idx: number) => {
+                                  // Handle both cases: pred as object or pred as direct value
+                                  let predictionValue;
+                                  let dataKeys: string[] = [];
+                                  
+                                  if (typeof pred === 'object' && pred !== null) {
+                                    // pred is an object with keys
+                                    const allKeys = Object.keys(pred);
+                                    const predictionKey = allKeys.find(k => k.endsWith('_prediction'));
+                                    predictionValue = predictionKey ? pred[predictionKey] : null;
+                                    dataKeys = allKeys.filter(k => !k.endsWith('_prediction') && !k.startsWith('probability'));
+                                  } else {
+                                    // pred is a direct value (number or string)
+                                    predictionValue = pred;
+                                  }
+                                  
+                                  return (
+                                    <tr
+                                      key={idx}
+                                      style={{
+                                        borderBottom: idx < predictionResults.predictions.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                                      }}
+                                    >
+                                      <td style={{ padding: "8px 12px", color: "#94a3b8" }}>{idx + 1}</td>
+                                      {dataKeys.length > 0 && dataKeys.slice(0, 3).map((key) => (
+                                        <td key={key} style={{ padding: "8px 12px", color: "#e2e8f0" }}>
+                                          {pred[key] !== null && pred[key] !== undefined 
+                                            ? (String(pred[key]).length > 20 ? String(pred[key]).substring(0, 20) + '...' : pred[key])
+                                            : '-'}
+                                        </td>
+                                      ))}
+                                      <td style={{ padding: "8px 12px", fontWeight: 600 }}>
+                                        <span
+                                          style={{
+                                            padding: "4px 10px",
+                                            borderRadius: 6,
+                                            background: "rgba(99, 102, 241, 0.2)",
+                                            color: "#8b5cf6",
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                          }}
+                                        >
+                                          {predictionValue !== null && predictionValue !== undefined
+                                            ? (typeof predictionValue === 'number' ? predictionValue.toFixed(2) : String(predictionValue))
+                                            : 'N/A'}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SECTION 2: MODEL INTELLIGENCE */}
+                      <div style={{ marginBottom: 24 }}>
+                        <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 14, color: "#8b5cf6" }}>
+                          🧠 Model Intelligence Analysis
+                        </p>
+                        
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 16 }}>
+                          <div style={{ padding: 14, borderRadius: 10, border: "1px solid rgba(59, 130, 246, 0.3)", background: "rgba(59, 130, 246, 0.1)" }}>
+                            <p style={{ fontSize: 11, fontWeight: 600, color: "#3b82f6", marginBottom: 4 }}>TOP INFLUENCER</p>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: "white" }}>
+                              {explanationResults.feature_impact?.[0]?.[0] || "N/A"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div style={{ marginBottom: 16, padding: 14, borderRadius: 10, border: "1px solid rgba(139, 92, 246, 0.3)", background: "rgba(0, 0, 0, 0.2)" }}>
+                          <p style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "#8b5cf6" }}>
+                            🌍 How the Model Works
+                          </p>
+                          <p style={{ fontSize: 13, lineHeight: 1.7, color: "#e2e8f0" }}>
+                            {explanationResults.global_explanation}
+                          </p>
+                        </div>
+
+                        <div style={{ marginBottom: 16, padding: 14, borderRadius: 10, border: "1px solid rgba(59, 130, 246, 0.3)", background: "rgba(0, 0, 0, 0.2)" }}>
+                          <p style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "#3b82f6" }}>
+                            🎯 Example Prediction Analysis
+                          </p>
+                          <p style={{ fontSize: 13, lineHeight: 1.7, color: "#e2e8f0" }}>
+                            {explanationResults.local_explanation}
+                          </p>
+                        </div>
+
+                        <div style={{ padding: 14, borderRadius: 10, border: "1px solid rgba(16, 185, 129, 0.3)", background: "rgba(0, 0, 0, 0.2)" }}>
+                          <p style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: "#10b981" }}>
+                            📈 Performance Metrics
+                          </p>
+                          <p style={{ fontSize: 13, lineHeight: 1.7, color: "#e2e8f0" }}>
+                            {explanationResults.model_performance}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* SECTION 3: FEATURE IMPORTANCE */}
+                      <div style={{ marginBottom: 24 }}>
+                        <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 14, color: "#f59e0b" }}>
+                          ⭐ Most Influential Features
+                        </p>
+                        <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>
+                          These features had the biggest impact on predictions:
+                        </p>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          {explanationResults.feature_impact && explanationResults.feature_impact.slice(0, 5).map(([feature, value]: [string, number], idx: number) => (
+                            <div
+                              key={idx}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 12,
+                                padding: "10px 14px",
+                                borderRadius: 10,
+                                border: "1px solid rgba(255, 255, 255, 0.1)",
+                                background: "rgba(15, 23, 42, 0.5)",
+                              }}
+                            >
+                              <div style={{ 
+                                minWidth: 28, 
+                                height: 28, 
+                                borderRadius: "50%", 
+                                background: "rgba(99, 102, 241, 0.2)", 
+                                display: "flex", 
+                                alignItems: "center", 
+                                justifyContent: "center",
+                                fontSize: 13,
+                                fontWeight: 700,
+                                color: "#8b5cf6"
+                              }}>
+                                {idx + 1}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <p style={{ fontSize: 13, fontWeight: 600, color: "white", marginBottom: 2 }}>{feature}</p>
+                                <div style={{ 
+                                  height: 4, 
+                                  borderRadius: 2, 
+                                  background: "rgba(255, 255, 255, 0.1)",
+                                  overflow: "hidden"
+                                }}>
+                                  <div style={{ 
+                                    height: "100%", 
+                                    width: `${Math.min(Math.abs(value) * 100, 100)}%`,
+                                    background: value > 0 ? "#10b981" : "#ef4444",
+                                    transition: "width 0.3s"
+                                  }} />
+                                </div>
+                              </div>
+                              <span style={{ 
+                                fontSize: 13, 
+                                fontWeight: 700,
+                                color: value > 0 ? "#10b981" : "#ef4444",
+                                minWidth: 70,
+                                textAlign: "right"
+                              }}>
+                                {value > 0 ? "+" : ""}{value.toFixed(4)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* SECTION 4: IMPORTANT NOTE */}
+                      <div style={{ padding: 14, borderRadius: 10, border: "1px solid rgba(245, 158, 11, 0.3)", background: "rgba(245, 158, 11, 0.05)" }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: "#f59e0b" }}>
+                          ⚠️ Important Note
+                        </p>
+                        <p style={{ fontSize: 12, lineHeight: 1.6, color: "#cbd5e1", fontStyle: "italic" }}>
+                          {explanationResults.limitations}
+                        </p>
                       </div>
                     </div>
                   )}

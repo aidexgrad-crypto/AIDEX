@@ -1,0 +1,14 @@
+StudentID,Name,Gender,AttendanceRate,StudyHoursPerWeek,PreviousGrade,ExtracurricularActivities,ParentalSupport,Study Hours,Attendance (%),Online Classes Taken,FinalGrade_prediction
+1138,Holly Spencer,Female,88,8,70,3,Medium,3.6,58,True,78.78867962361623
+6428,Jessica Davies,Female,82,20,70,0,High,4.0,60,True,80.17679559516623
+5753,Daniel Sullivan,Male,78,17,85,2,Low,4.4,93,True,80.00359561978996
+3638,Richard Franklin,Female,85,10,88,2,Medium,4.3,77,True,80.41695556851965
+7350,Samantha Klein,Male,92,22,86,2,High,3.1,81,True,78.99106289413106
+2116,Kimberly Pena,Female,91,30,88,2,High,3.6,79,False,79.0297363513684
+8753,Rebecca Burnett,Female,85,10,85,3,Medium,1.8,68,False,80.29673553036146
+7701,Anna Martinez,Male,85,30,70,3,Medium,0.4,76,False,79.02834757247949
+3592,Monica Johnson,Female,90,25,60,1,Low,1.7,79,False,79.50450841071246
+2787,Shannon Porter,Male,78,20,60,0,High,1.6,70,False,77.93361451171435
+4497,Amy Stout,Female,91,21,86,0,High,3.9,80,True,80.13302651116261
+7636,Joseph Sherman,Male,88,17,60,2,High,0.9,53,True,77.6238160672389
+8021,Maria Walls,Female,88,10,90,1,Medium,2.4,94,True,81.37913615439106

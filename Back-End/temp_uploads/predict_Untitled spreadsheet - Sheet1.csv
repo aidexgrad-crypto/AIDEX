@@ -1,0 +1,18 @@
+StudentID,Name,Gender,AttendanceRate,StudyHoursPerWeek,PreviousGrade,ExtracurricularActivities,ParentalSupport,Study Hours,Attendance (%),Online Classes Taken
+1138,Holly Spencer,Female,88,8,70,3,Medium,3.6,58,TRUE
+6428,Jessica Davies,Female,82,20,70,0,High,4,,TRUE
+5753,Daniel Sullivan,Male,78,17,85,2,Low,4.4,93,TRUE
+3638,Richard Franklin,Female,85,10,88,2,Medium,4.3,77,TRUE
+7350,Samantha Klein,Male,92,22,86,2,High,3.1,81,TRUE
+1244,Becky Perkins,Male,88,12,85,1,High,1.6,68,
+2116,Kimberly Pena,Female,91,30,88,2,High,3.6,79,FALSE
+8753,Rebecca Burnett,,85,10,85,3,Medium,1.8,68,FALSE
+7701,Anna Martinez,Male,85,30,70,3,Medium,0.4,76,FALSE
+,James Garcia,Male,91,15,90,2,High,4.3,68,FALSE
+3592,Monica Johnson,Female,90,25,60,1,Low,1.7,79,FALSE
+2787,Shannon Porter,Male,78,20,60,0,High,1.6,70,FALSE
+,Kenneth Murray,Male,85,20,,1,High,0.8,80,TRUE
+4497,Amy Stout,Female,91,,86,0,High,3.9,80,TRUE
+1886,,Male,85,8,82,2,Low,0.4,54,FALSE
+7636,Joseph Sherman,Male,88,17,60,2,High,0.9,53,TRUE
+8021,Maria Walls,Female,88,10,90,1,Medium,2.4,94,TRUE
